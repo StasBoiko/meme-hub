@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Smart Guestbook</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = {
+			theme: {
+				extend: {
+					fontFamily: {
+						sans: ["Outfit", "system-ui", "sans-serif"],
+					},
+					colors: {
+						ink: "#07090f",
+					},
+				},
+			},
+		};
+	</script>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body class="min-h-screen bg-ink text-slate-100 font-sans antialiased">
+	<div class="pointer-events-none fixed inset-0 overflow-hidden">
+		<div
+			class="absolute -top-24 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-violet-600/25 blur-[120px]">
+		</div>
+		<div class="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-cyan-500/15 blur-[100px]"></div>
+		<div
+			class="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] bg-[size:28px_28px]">
+		</div>
+	</div>
+
+	<main class="relative mx-auto flex min-h-screen max-w-3xl flex-col items-center px-6 py-16">
+		<p
+			class="mb-4 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium tracking-wide text-slate-300">
+			Online · guests are already leaving their mark
+		</p>
+
+		<h1 class="text-center text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
+			Smart Guestbook
+		</h1>
+		<p class="mt-4 max-w-xl text-center text-lg text-slate-400">
+			Sign in with Google and leave your mark among the guests.
+		</p>
+
+		{{if not .User}}
+		<a href="/login"
+			class="mt-10 inline-flex items-center gap-3 rounded-2xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-[0_0_40px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-100">
+			<svg class="h-6 w-6" viewBox="0 0 24 24" aria-hidden="true">
+				<path fill="#4285F4"
+					d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.29h6.47a5.53 5.53 0 0 1-2.4 3.63v3.01h3.87c2.27-2.09 3.55-5.17 3.55-8.66z" />
+				<path fill="#34A853"
+					d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3.01c-1.08.72-2.47 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.97H1.27v3.11A12 12 0 0 0 12 24z" />
+				<path fill="#FBBC05"
+					d="M5.25 14.26A7.21 7.21 0 0 1 4.87 12c0-.79.14-1.55.38-2.26V6.63H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.37l3.98-3.11z" />
+				<path fill="#EA4335"
+					d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.63l3.98 3.11C6.2 6.87 8.86 4.75 12 4.75z" />
+			</svg>
+			Sign in with Google
+		</a>
+		{{else}}
+		<div class="mt-10 w-full">
+			<div
+				class="mb-6 flex items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+				<div class="flex min-w-0 items-center gap-3">
+					{{if .User.Avatar}}
+					<img src="{{.User.Avatar}}" alt="" class="h-12 w-12 rounded-2xl object-cover">
+					{{else}}
+					<div
+						class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 font-bold">
+						{{initials .User.Name}}</div>
+					{{end}}
+					<div class="min-w-0">
+						<p class="truncate font-semibold text-white">{{.User.Name}}</p>
+						<p class="truncate text-sm text-slate-400">{{.User.Email}}</p>
+					</div>
+				</div>
+				<a href="/logout"
+					class="shrink-0 text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline">Exit</a>
+			</div>
+
+			<form method="POST" action="/messages"
+				class="rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+				<label for="text" class="mb-3 block text-sm font-medium tracking-wide text-slate-300">New Entry</label>
+				<textarea id="text" name="text" required maxlength="2000" rows="5"
+					placeholder="Share your thoughts, greetings, or a story…"
+					class="w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-base leading-relaxed text-white placeholder:text-slate-500 focus:border-violet-400/70 focus:outline-none focus:ring-2 focus:ring-violet-500/30"></textarea>
+				<button type="submit"
+					class="mt-5 w-full rounded-2xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 px-6 py-3.5 text-base font-semibold text-slate-950 shadow-[0_0_32px_rgba(167,139,250,0.35)] transition hover:opacity-90">
+					Leave a message in the Guestbook
+				</button>
+			</form>
+		</div>
+		{{end}}
+
+		<section class="mt-14 w-full">
+			<h2 class="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Guest Entries</h2>
+			<div class="space-y-3">
+				{{if not .Messages}}
+				<p class="text-slate-500">It's quiet for now — be the first guest.</p>
+				{{end}}
+				{{range .Messages}}
+				<article class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl">
+					<div class="flex items-start gap-4">
+						{{if .User.Avatar}}
+						<img src="{{.User.Avatar}}" alt="" class="h-14 w-14 shrink-0 rounded-2xl object-cover">
+						{{else}}
+						<div
+							class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 text-lg font-bold text-white">
+							{{initials .User.Name}}</div>
+						{{end}}
+						<div class="min-w-0 flex-1">
+							<div class="flex flex-wrap items-baseline justify-between gap-2">
+								<h3 class="text-lg font-semibold text-white">{{.User.Name}}</h3>
+								<time class="text-xs text-slate-500">{{formatTime .CreatedAt}}</time>
+							</div>
+							<p class="mt-3 whitespace-pre-wrap text-slate-200">{{.Text}}</p>
+						</div>
+					</div>
+				</article>
+				{{end}}
+			</div>
+		</section>
+	</main>
+</body>
+
+</html>
