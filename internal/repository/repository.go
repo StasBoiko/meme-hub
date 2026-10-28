@@ -33,3 +33,15 @@ type Repository interface {
 	// Ping verifies connectivity to the underlying data store.
 	Ping(ctx context.Context) error
 }
+
+// SessionStore defines data persistence operations for user sessions.
+type SessionStore interface {
+	// Set stores a user session for the given session ID with an expiration duration.
+	Set(ctx context.Context, sessionID string, user SessionUser, ttl time.Duration) error
+	// Get retrieves a user session by its session ID. Returns false if the session is not found or expired.
+	Get(ctx context.Context, sessionID string) (SessionUser, bool, error)
+	// Delete removes a user session by its session ID.
+	Delete(ctx context.Context, sessionID string) error
+	// Ping verifies connectivity to the underlying session store.
+	Ping(ctx context.Context) error
+}

@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -27,12 +26,11 @@ import (
 
 // Server represents the HTTP application server and its dependencies.
 type Server struct {
-	cfg        config.Config
-	repo       repository.Repository
-	oauth      *oauth2.Config
-	tmpl       *template.Template
-	sessionsMu sync.RWMutex
-	sessions   map[string]repository.SessionUser
+	cfg      config.Config
+	repo     repository.Repository
+	sessions repository.SessionStore
+	oauth    *oauth2.Config
+	tmpl     *template.Template
 }
 
 // pageData contains data passed to the HTML template for rendering.
@@ -49,11 +47,12 @@ type googleProfile struct {
 }
 
 // New creates a new Server instance.
-func New(cfg config.Config, repo repository.Repository, tmpl *template.Template) *Server {
+func New(cfg config.Config, repo repository.Repository, tmpl *template.Template, sessions repository.SessionStore) *Server {
 	return &Server{
-		cfg:  cfg,
-		repo: repo,
-		tmpl: tmpl,
+		cfg:      cfg,
+		repo:     repo,
+		sessions: sessions,
+		tmpl:     tmpl,
 		oauth: &oauth2.Config{
 			ClientID:     cfg.OAuth.ClientID,
 			ClientSecret: cfg.OAuth.ClientSecret,
@@ -64,7 +63,6 @@ func New(cfg config.Config, repo repository.Repository, tmpl *template.Template)
 			},
 			Endpoint: google.Endpoint,
 		},
-		sessions: make(map[string]repository.SessionUser),
 	}
 }
 
@@ -223,9 +221,11 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not create session", http.StatusInternalServerError)
 		return
 	}
-	s.sessionsMu.Lock()
-	s.sessions[sid] = user
-	s.sessionsMu.Unlock()
+	if err := s.sessions.Set(ctx, sid, user, s.cfg.Session.Duration); err != nil {
+		slog.ErrorContext(ctx, "error saving session", "err", err)
+		http.Error(w, "could not save session", http.StatusInternalServerError)
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cfg.Session.CookieName,
@@ -240,10 +240,10 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 
 // handleLogout clears the current user session and redirects to the home page.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(s.cfg.Session.CookieName); err == nil {
-		s.sessionsMu.Lock()
-		delete(s.sessions, c.Value)
-		s.sessionsMu.Unlock()
+	if c, err := r.Cookie(s.cfg.Session.CookieName); err == nil && c.Value != "" {
+		if err := s.sessions.Delete(r.Context(), c.Value); err != nil {
+			slog.ErrorContext(r.Context(), "error deleting session", "err", err)
+		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: s.cfg.Session.CookieName, Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -325,10 +325,11 @@ func (s *Server) CurrentUser(r *http.Request) (repository.SessionUser, bool) {
 	if err != nil || c.Value == "" {
 		return repository.SessionUser{}, false
 	}
-	s.sessionsMu.RLock()
-	defer s.sessionsMu.RUnlock()
-	user, ok := s.sessions[c.Value]
-	return user, ok
+	user, ok, err := s.sessions.Get(r.Context(), c.Value)
+	if err != nil || !ok {
+		return repository.SessionUser{}, false
+	}
+	return user, true
 }
 
 // randomToken generates a cryptographically secure random hexadecimal token.

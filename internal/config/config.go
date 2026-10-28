@@ -13,6 +13,8 @@ type Config struct {
 	Port string
 	// DatabaseURL contains the PostgreSQL connection string.
 	DatabaseURL string
+	// RedisURL contains the Redis connection string.
+	RedisURL string
 	// OAuth contains Google OAuth2 configuration parameters.
 	OAuth OAuthConfig
 	// Session contains user session configuration parameters.
@@ -53,6 +55,7 @@ func Load() Config {
 	return Config{
 		Port:        port,
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:secret@localhost:5433/guestbook_db?sslmode=disable"),
+		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		OAuth: OAuthConfig{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
