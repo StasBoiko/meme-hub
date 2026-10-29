@@ -36,6 +36,15 @@ var ErrEmptyMessage = errors.New("message is empty")
 // ErrMessageTooLong indicates that the message text exceeds the maximum allowed length.
 var ErrMessageTooLong = errors.New("message is too long")
 
+// MaxCommentLength is the maximum allowed rune length for a comment.
+const MaxCommentLength = 1000
+
+// ErrEmptyComment indicates that the comment text is empty.
+var ErrEmptyComment = errors.New("comment is empty")
+
+// ErrCommentTooLong indicates that the comment text exceeds the maximum allowed length.
+var ErrCommentTooLong = errors.New("comment is too long")
+
 // ValidateEmail checks whether the provided string is a valid email address.
 func ValidateEmail(email string) error {
 	if utf8.RuneCountInString(strings.TrimSpace(email)) == 0 {
@@ -85,4 +94,23 @@ func ValidateMessageText(text string) error {
 // IsValidMessageText reports whether the provided message text is valid.
 func IsValidMessageText(text string) bool {
 	return ValidateMessageText(text) == nil
+}
+
+// ValidateCommentText checks whether the provided comment text is non-empty and does not exceed the maximum length.
+func ValidateCommentText(text string) error {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ErrEmptyComment
+	}
+
+	if utf8.RuneCountInString(trimmed) > MaxCommentLength {
+		return ErrCommentTooLong
+	}
+
+	return nil
+}
+
+// IsValidCommentText reports whether the provided comment text is valid.
+func IsValidCommentText(text string) bool {
+	return ValidateCommentText(text) == nil
 }

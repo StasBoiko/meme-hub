@@ -16,9 +16,14 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
-	"guestbook-app/internal/config"
-	"guestbook-app/internal/handler"
-	"guestbook-app/internal/repository"
+	"meme-hub/internal/broker"
+	"meme-hub/internal/config"
+	"meme-hub/internal/handler"
+	"meme-hub/internal/mailer"
+	"meme-hub/internal/moderation"
+	"meme-hub/internal/repository"
+	"meme-hub/internal/search"
+	"meme-hub/internal/worker"
 )
 
 const (
@@ -92,13 +97,111 @@ func main() {
 		os.Exit(1)
 	}
 
+	var mailSender mailer.Sender = mailer.NewNopSender()
+	if cfg.SMTP.Host != "" {
+		mailSender = mailer.NewSMTPSender(
+			cfg.SMTP.Host,
+			cfg.SMTP.Port,
+			cfg.SMTP.Username,
+			cfg.SMTP.Password,
+			cfg.SMTP.From,
+		)
+		slog.Info("initialized smtp mailer", "host", cfg.SMTP.Host, "port", cfg.SMTP.Port, "from", cfg.SMTP.From)
+	}
+
+	var searchService search.Service = search.NewNopService()
+	esClient, err := search.NewClient(cfg.ElasticsearchURL)
+	if err != nil {
+		slog.Warn("could not initialize elasticsearch client, using nop searcher", "err", err)
+	} else {
+		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		if pingErr := esClient.Ping(pingCtx); pingErr != nil {
+			slog.Warn("elasticsearch ping failed, search will operate with fallback", "err", pingErr)
+		} else {
+			slog.Info("connected to elasticsearch successfully", "url", cfg.ElasticsearchURL)
+			searchService = esClient
+		}
+		pingCancel()
+	}
+
+	// Asynchronously sync existing approved messages into search index on startup.
+	go func() {
+		syncCtx, syncCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer syncCancel()
+		messages, fetchErr := repo.GetMessages(syncCtx, 0, "fresh", 1000)
+		if fetchErr == nil {
+			for _, m := range messages {
+				if m.Status == repository.MessageStatusApproved {
+					_ = searchService.IndexMessage(syncCtx, search.Document{
+						ID:        m.ID,
+						UserID:    m.User.ID,
+						Author:    m.User.Name,
+						Avatar:    m.User.Avatar,
+						Text:      m.Text,
+						MediaURL:  m.MediaURL,
+						Upvotes:   m.Upvotes,
+						Downvotes: m.Downvotes,
+						Score:     m.Score,
+						CreatedAt: m.CreatedAt,
+					})
+				}
+			}
+		}
+	}()
+
+	var publisher broker.Publisher = broker.NewNopPublisher()
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+
+	rabbitClient, err := broker.NewRabbitMQClient(cfg.RabbitMQURL)
+	if err != nil {
+		slog.Warn("could not connect to rabbitmq, using nop publisher", "err", err)
+	} else {
+		slog.Info("connected to rabbitmq successfully", "url", cfg.RabbitMQURL)
+		publisher = rabbitClient
+		defer func() {
+			if closeErr := rabbitClient.Close(); closeErr != nil {
+				slog.Error("failed to close rabbitmq connection", "err", closeErr)
+			}
+		}()
+
+		moderator := moderation.NewRuleBasedModerator()
+		moderationWorker := worker.NewModerationWorker(
+			rabbitClient.Connection(),
+			repo,
+			moderator,
+			rabbitClient,
+			searchService,
+			cfg.SMTP.AdminEmail,
+			broker.QueueModeration,
+		)
+
+		go func() {
+			if workerErr := moderationWorker.Start(workerCtx); workerErr != nil && !errors.Is(workerErr, context.Canceled) {
+				slog.Error("moderation worker stopped unexpectedly", "err", workerErr)
+			}
+		}()
+
+		emailWorker := worker.NewEmailWorker(
+			rabbitClient.Connection(),
+			mailSender,
+			broker.QueueEmail,
+		)
+
+		go func() {
+			if workerErr := emailWorker.Start(workerCtx); workerErr != nil && !errors.Is(workerErr, context.Canceled) {
+				slog.Error("email worker stopped unexpectedly", "err", workerErr)
+			}
+		}()
+	}
+
 	tmpl, err := handler.NewTemplate("web/template/index.html")
 	if err != nil {
 		slog.Error("failed to load template", "err", err)
 		os.Exit(1)
 	}
 
-	srv := handler.New(cfg, repo, tmpl, sessionStore)
+	srv := handler.New(cfg, repo, tmpl, sessionStore, publisher, searchService)
 
 	httpServer := &http.Server{
 		Addr:         cfg.Addr(),
@@ -127,6 +230,7 @@ func main() {
 	case <-ctx.Done():
 		slog.Info("shutdown signal received, commencing graceful shutdown")
 		stop()
+		workerCancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer shutdownCancel()

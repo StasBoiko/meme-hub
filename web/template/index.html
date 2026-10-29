@@ -4,7 +4,8 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Smart Guestbook</title>
+	<title>Meme Hub — Entertainment & Humor Portal</title>
+	<meta name="description" content="Meme Hub is your community portal for fresh memes, viral videos, funny stories, and laughter. Vote, share, and enjoy the best daily humor.">
 	<script src="https://cdn.tailwindcss.com"></script>
 	<script>
 		tailwind.config = {
@@ -14,7 +15,7 @@
 						sans: ["Outfit", "system-ui", "sans-serif"],
 					},
 					colors: {
-						ink: "#07090f",
+						ink: "#080a10",
 					},
 				},
 			},
@@ -23,111 +24,541 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+	<style>
+		.glass-panel {
+			background: rgba(255, 255, 255, 0.04);
+			backdrop-filter: blur(16px);
+			-webkit-backdrop-filter: blur(16px);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+		}
+		.glass-card {
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+			backdrop-filter: blur(14px);
+			-webkit-backdrop-filter: blur(14px);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+		}
+		.vote-btn-active-up {
+			background: rgba(34, 197, 94, 0.18) !important;
+			color: #4ade80 !important;
+			border-color: rgba(34, 197, 94, 0.4) !important;
+		}
+		.vote-btn-active-down {
+			background: rgba(244, 63, 94, 0.18) !important;
+			color: #fb7185 !important;
+			border-color: rgba(244, 63, 94, 0.4) !important;
+		}
+	</style>
 </head>
 
-<body class="min-h-screen bg-ink text-slate-100 font-sans antialiased">
-	<div class="pointer-events-none fixed inset-0 overflow-hidden">
-		<div
-			class="absolute -top-24 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-violet-600/25 blur-[120px]">
-		</div>
-		<div class="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-cyan-500/15 blur-[100px]"></div>
-		<div
-			class="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.04)_1px,transparent_0)] bg-[size:28px_28px]">
-		</div>
+<body class="min-h-screen bg-ink text-slate-100 font-sans antialiased selection:bg-violet-500/30">
+	<!-- Ambient Background Glow -->
+	<div class="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
+		<div class="absolute -top-32 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-violet-600/20 blur-[130px]"></div>
+		<div class="absolute top-1/3 -left-20 h-80 w-80 rounded-full bg-fuchsia-600/15 blur-[120px]"></div>
+		<div class="absolute bottom-10 right-0 h-80 w-80 rounded-full bg-cyan-500/15 blur-[120px]"></div>
+		<div class="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.035)_1px,transparent_0)] bg-[size:32px_32px]"></div>
 	</div>
 
-	<main class="relative mx-auto flex min-h-screen max-w-3xl flex-col items-center px-6 py-16">
-		<p
-			class="mb-4 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium tracking-wide text-slate-300">
-			Online · guests are already leaving their mark
-		</p>
+	<main class="relative mx-auto flex min-h-screen max-w-3xl flex-col items-center px-4 py-12 sm:px-6 sm:py-16">
+		<!-- Hero Badge -->
+		<div class="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-xs font-semibold tracking-wide text-violet-300 shadow-[0_0_20px_rgba(139,92,246,0.2)]">
+			<span class="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+			<span>Meme Hub · Step 2: Reactions & Comments</span>
+		</div>
 
+		<!-- Main Page Title -->
 		<h1 class="text-center text-5xl font-extrabold tracking-tight text-white sm:text-6xl">
-			Smart Guestbook
+			Meme <span class="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent">Hub</span>
 		</h1>
-		<p class="mt-4 max-w-xl text-center text-lg text-slate-400">
-			Sign in with Google and leave your mark among the guests.
+		<p class="mt-4 max-w-lg text-center text-base sm:text-lg text-slate-400">
+			Explore the freshest memes, upload funny clips, rate posts, and discover what’s hot.
 		</p>
 
 		{{if not .User}}
-		<a href="/login"
-			class="mt-10 inline-flex items-center gap-3 rounded-2xl bg-white px-8 py-4 text-lg font-semibold text-slate-900 shadow-[0_0_40px_rgba(255,255,255,0.18)] transition hover:-translate-y-0.5 hover:bg-slate-100">
-			<svg class="h-6 w-6" viewBox="0 0 24 24" aria-hidden="true">
-				<path fill="#4285F4"
-					d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.29h6.47a5.53 5.53 0 0 1-2.4 3.63v3.01h3.87c2.27-2.09 3.55-5.17 3.55-8.66z" />
-				<path fill="#34A853"
-					d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3.01c-1.08.72-2.47 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.97H1.27v3.11A12 12 0 0 0 12 24z" />
-				<path fill="#FBBC05"
-					d="M5.25 14.26A7.21 7.21 0 0 1 4.87 12c0-.79.14-1.55.38-2.26V6.63H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.37l3.98-3.11z" />
-				<path fill="#EA4335"
-					d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.63l3.98 3.11C6.2 6.87 8.86 4.75 12 4.75z" />
-			</svg>
-			Sign in with Google
-		</a>
+		<div class="mt-8 flex flex-col items-center gap-3">
+			<a id="btn-login" href="/login"
+				class="inline-flex items-center gap-3 rounded-2xl bg-white px-7 py-3.5 text-base font-semibold text-slate-950 shadow-[0_0_35px_rgba(255,255,255,0.2)] transition duration-200 hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-[0_0_45px_rgba(255,255,255,0.3)] active:translate-y-0">
+				<svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+					<path fill="#4285F4"
+						d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.29h6.47a5.53 5.53 0 0 1-2.4 3.63v3.01h3.87c2.27-2.09 3.55-5.17 3.55-8.66z" />
+					<path fill="#34A853"
+						d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.87-3.01c-1.08.72-2.47 1.15-4.08 1.15-3.14 0-5.8-2.12-6.75-4.97H1.27v3.11A12 12 0 0 0 12 24z" />
+					<path fill="#FBBC05"
+						d="M5.25 14.26A7.21 7.21 0 0 1 4.87 12c0-.79.14-1.55.38-2.26V6.63H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.37l3.98-3.11z" />
+					<path fill="#EA4335"
+						d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.63l3.98 3.11C6.2 6.87 8.86 4.75 12 4.75z" />
+				</svg>
+				Sign in with Google to Post & Vote
+			</a>
+			<p class="text-xs text-slate-500">Sign in to vote on memes and publish your own content</p>
+		</div>
 		{{else}}
-		<div class="mt-10 w-full">
-			<div
-				class="mb-6 flex items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-xl">
+		<!-- Authenticated User Profile & Creation Box -->
+		<div class="mt-8 w-full">
+			<div class="mb-5 flex items-center justify-between gap-4 rounded-3xl glass-panel p-3.5 sm:p-4">
 				<div class="flex min-w-0 items-center gap-3">
 					{{if .User.Avatar}}
-					<img src="{{.User.Avatar}}" alt="" class="h-12 w-12 rounded-2xl object-cover">
+					<img src="{{.User.Avatar}}" alt="{{.User.Name}}" class="h-11 w-11 rounded-2xl object-cover ring-2 ring-white/10">
 					{{else}}
-					<div
-						class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 font-bold">
-						{{initials .User.Name}}</div>
+					<div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 font-bold text-white shadow-md">
+						{{initials .User.Name}}
+					</div>
 					{{end}}
 					<div class="min-w-0">
-						<p class="truncate font-semibold text-white">{{.User.Name}}</p>
-						<p class="truncate text-sm text-slate-400">{{.User.Email}}</p>
+						<p class="truncate font-semibold text-white text-sm sm:text-base">{{.User.Name}}</p>
+						<p class="truncate text-xs text-slate-400">{{.User.Email}}</p>
 					</div>
 				</div>
-				<a href="/logout"
-					class="shrink-0 text-sm text-slate-400 underline-offset-4 hover:text-white hover:underline">Exit</a>
+				<a id="btn-logout" href="/logout"
+					class="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
+					Sign out
+				</a>
 			</div>
 
-			<form method="POST" action="/messages"
-				class="rounded-3xl border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-				<label for="text" class="mb-3 block text-sm font-medium tracking-wide text-slate-300">New Entry</label>
-				<textarea id="text" name="text" required maxlength="2000" rows="5"
-					placeholder="Share your thoughts, greetings, or a story…"
-					class="w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-base leading-relaxed text-white placeholder:text-slate-500 focus:border-violet-400/70 focus:outline-none focus:ring-2 focus:ring-violet-500/30"></textarea>
-				<button type="submit"
-					class="mt-5 w-full rounded-2xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 px-6 py-3.5 text-base font-semibold text-slate-950 shadow-[0_0_32px_rgba(167,139,250,0.35)] transition hover:opacity-90">
-					Leave a message in the Guestbook
+			<!-- Post Creation Form -->
+			<form id="post-form" method="POST" action="/messages" class="rounded-3xl glass-card p-5 sm:p-6 shadow-2xl">
+				<label for="text" class="mb-2 block text-sm font-semibold tracking-wide text-slate-200">
+					Create Post / Meme 🎭
+				</label>
+				<textarea id="text" name="text" required maxlength="2000" rows="3"
+					placeholder="Caption, punchline, or hilarious story…"
+					class="w-full resize-y rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm sm:text-base leading-relaxed text-white placeholder:text-slate-500 transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20"></textarea>
+
+				<div class="mt-3">
+					<label for="media_url" class="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-300">
+						<span>Media Link <span class="text-slate-500">(optional)</span></span>
+						<span class="text-[11px] text-slate-500">Image, GIF, MP4 or YouTube URL</span>
+					</label>
+					<div class="relative">
+						<span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+							</svg>
+						</span>
+						<input type="url" id="media_url" name="media_url" maxlength="2000"
+							placeholder="https://i.imgur.com/...jpg, https://youtu.be/... or .mp4"
+							class="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-4 text-xs sm:text-sm text-white placeholder:text-slate-500 transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
+					</div>
+				</div>
+
+				<button type="submit" id="btn-submit-post"
+					class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 px-6 py-3 text-sm sm:text-base font-semibold text-slate-950 shadow-[0_0_25px_rgba(167,139,250,0.3)] transition duration-200 hover:opacity-95 hover:shadow-[0_0_35px_rgba(167,139,250,0.4)] active:scale-[0.99]">
+					<span>Publish Meme Post</span>
+					<span>🚀</span>
 				</button>
 			</form>
 		</div>
 		{{end}}
 
-		<section class="mt-14 w-full">
-			<h2 class="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Guest Entries</h2>
-			<div class="space-y-3">
-				{{if not .Messages}}
-				<p class="text-slate-500">It's quiet for now — be the first guest.</p>
+		<!-- Feed Section -->
+		<section class="mt-10 w-full">
+			<!-- Header & Sorting Tabs -->
+			<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex items-center gap-2">
+					<h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Posts Stream</h2>
+					{{if .Query}}
+					<span class="rounded-lg bg-violet-500/20 px-2 py-0.5 text-xs font-medium text-violet-300">
+						Results for "{{.Query}}"
+					</span>
+					{{end}}
+				</div>
+
+				<!-- Sorting Tabs -->
+				<div class="flex items-center rounded-xl glass-panel p-1">
+					<a id="tab-sort-hot" href="/?sort=hot{{if .Query}}&q={{.Query}}{{end}}"
+						class="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition {{if eq .Sort "hot"}}bg-violet-600 text-white shadow-md{{else}}text-slate-400 hover:text-white{{end}}">
+						<span>🔥</span>
+						<span>Hot</span>
+					</a>
+					<a id="tab-sort-fresh" href="/?sort=fresh{{if .Query}}&q={{.Query}}{{end}}"
+						class="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition {{if eq .Sort "fresh"}}bg-violet-600 text-white shadow-md{{else}}text-slate-400 hover:text-white{{end}}">
+						<span>✨</span>
+						<span>Fresh</span>
+					</a>
+				</div>
+			</div>
+
+			<!-- Search Bar -->
+			<form id="search-form" method="GET" action="/" class="mb-6 flex gap-2">
+				<input type="hidden" name="sort" value="{{.Sort}}">
+				<div class="relative flex-1">
+					<span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+						<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+						</svg>
+					</span>
+					<input type="text" id="input-search" name="q" value="{{.Query}}" placeholder="Search memes, jokes, authors..."
+						class="w-full rounded-xl border border-white/10 bg-black/40 py-2.5 pl-10 pr-4 text-xs sm:text-sm text-white placeholder:text-slate-500 transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
+				</div>
+				<button type="submit" id="btn-search-submit"
+					class="inline-flex items-center justify-center rounded-xl bg-white/10 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white transition hover:bg-white/20 active:scale-95">
+					Search
+				</button>
+				{{if .Query}}
+				<a id="btn-search-reset" href="/?sort={{.Sort}}"
+					class="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs sm:text-sm font-medium text-slate-300 transition hover:bg-white/10">
+					Clear
+				</a>
 				{{end}}
+			</form>
+
+			<!-- Post Cards Stream -->
+			<div class="space-y-4" id="posts-container">
+				{{if not .Messages}}
+					{{if .Query}}
+					<div class="rounded-3xl glass-panel p-8 text-center">
+						<p class="text-base text-slate-300">No memes or posts found matching <span class="font-semibold text-white">"{{.Query}}"</span>.</p>
+						<a href="/?sort={{.Sort}}" class="mt-4 inline-block text-xs font-semibold text-violet-400 underline hover:text-violet-300">Clear filter and show all</a>
+					</div>
+					{{else}}
+					<div class="rounded-3xl glass-panel p-10 text-center">
+						<p class="text-4xl mb-2">🎉</p>
+						<h3 class="text-lg font-semibold text-white">No memes posted yet!</h3>
+						<p class="text-sm text-slate-400 mt-1">Be the first legend to post a meme or video.</p>
+					</div>
+					{{end}}
+				{{end}}
+
 				{{range .Messages}}
-				<article class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl">
-					<div class="flex items-start gap-4">
-						{{if .User.Avatar}}
-						<img src="{{.User.Avatar}}" alt="" class="h-14 w-14 shrink-0 rounded-2xl object-cover">
-						{{else}}
-						<div
-							class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-400 text-lg font-bold text-white">
-							{{initials .User.Name}}</div>
-						{{end}}
-						<div class="min-w-0 flex-1">
-							<div class="flex flex-wrap items-baseline justify-between gap-2">
-								<h3 class="text-lg font-semibold text-white">{{.User.Name}}</h3>
-								<time class="text-xs text-slate-500">{{formatTime .CreatedAt}}</time>
+				<article id="message-card-{{.ID}}" data-message-id="{{.ID}}" class="overflow-hidden rounded-3xl glass-card p-5 sm:p-6 shadow-xl transition hover:border-white/15">
+					<!-- Author Header -->
+					<div class="flex items-center justify-between gap-3">
+						<div class="flex items-center gap-3 min-w-0">
+							{{if .User.Avatar}}
+							<img src="{{.User.Avatar}}" alt="{{.User.Name}}" class="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-white/10">
+							{{else}}
+							<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-cyan-400 text-sm font-bold text-white shadow-sm">
+								{{initials .User.Name}}
 							</div>
-							<p class="mt-3 whitespace-pre-wrap text-slate-200">{{.Text}}</p>
+							{{end}}
+							<div class="min-w-0">
+								<div class="flex items-center gap-2">
+									<span class="truncate font-semibold text-white text-sm sm:text-base">{{.User.Name}}</span>
+									{{if eq .Status "pending"}}
+									<span class="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">Under moderation</span>
+									{{end}}
+								</div>
+								<time class="text-[11px] text-slate-400 block">{{formatTime .CreatedAt}}</time>
+							</div>
 						</div>
+
+						<!-- Score Badge -->
+						<div class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300">
+							<span>Score:</span>
+							<span id="score-badge-{{.ID}}" class="font-bold {{if gt .Score 0}}text-emerald-400{{else if lt .Score 0}}text-rose-400{{else}}text-slate-300{{end}}">
+								{{.Score}}
+							</span>
+						</div>
+					</div>
+
+					<!-- Text Body -->
+					<p class="mt-3.5 whitespace-pre-wrap text-sm sm:text-base leading-relaxed text-slate-100">{{.Text}}</p>
+
+					<!-- Media Link Preview / Embed -->
+					{{if .MediaURL}}
+					<div class="mt-3.5">
+						{{if isImageURL .MediaURL}}
+						<div class="overflow-hidden rounded-2xl border border-white/10 bg-black/50">
+							<img src="{{.MediaURL}}" alt="Meme media" loading="lazy" class="max-h-[500px] w-full object-contain mx-auto transition duration-300 hover:scale-[1.01]">
+						</div>
+						{{else if isVideoURL .MediaURL}}
+						<div class="overflow-hidden rounded-2xl border border-white/10 bg-black/60">
+							<video src="{{.MediaURL}}" controls preload="metadata" class="max-h-[500px] w-full rounded-2xl"></video>
+						</div>
+						{{else if youtubeEmbedURL .MediaURL}}
+						<div class="aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black/60 shadow-lg">
+							<iframe src="{{youtubeEmbedURL .MediaURL}}" class="h-full w-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+						</div>
+						{{else}}
+						<a href="{{.MediaURL}}" target="_blank" rel="noopener noreferrer"
+							class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-cyan-400 transition hover:bg-white/10 hover:text-cyan-300">
+							<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+							</svg>
+							<span>Attachment Link</span>
+						</a>
+						{{end}}
+					</div>
+					{{end}}
+
+					<!-- Rating & Comments Bar -->
+					<div class="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+						<div class="flex items-center gap-2" id="action-controls-{{.ID}}">
+							<!-- Upvote Button -->
+							<button type="button" data-id="{{.ID}}" onclick="castVote(this, 1)" id="btn-upvote-{{.ID}}"
+								class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition duration-150 hover:bg-emerald-500/10 hover:text-emerald-400 active:scale-95 {{if eq .UserVote 1}}vote-btn-active-up{{end}}">
+								<span class="text-sm">👍</span>
+								<span id="upvotes-count-{{.ID}}" class="font-semibold">{{.Upvotes}}</span>
+							</button>
+
+							<!-- Downvote Button -->
+							<button type="button" data-id="{{.ID}}" onclick="castVote(this, -1)" id="btn-downvote-{{.ID}}"
+								class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition duration-150 hover:bg-rose-500/10 hover:text-rose-400 active:scale-95 {{if eq .UserVote -1}}vote-btn-active-down{{end}}">
+								<span class="text-sm">👎</span>
+								<span id="downvotes-count-{{.ID}}" class="font-semibold">{{.Downvotes}}</span>
+							</button>
+
+							<!-- Comments Toggle Button -->
+							<button type="button" data-id="{{.ID}}" onclick="toggleComments(this)" id="btn-toggle-comments-{{.ID}}"
+								class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition duration-150 hover:bg-violet-500/10 hover:text-violet-300 active:scale-95">
+								<span class="text-sm">💬</span>
+								<span id="comments-count-{{.ID}}" class="font-semibold">{{.CommentsCount}}</span>
+								<span class="hidden sm:inline">Comments</span>
+							</button>
+						</div>
+
+						<div class="text-[11px] text-slate-500">
+							ID #{{.ID}}
+						</div>
+					</div>
+
+					<!-- Comments Thread Section -->
+					<div id="comments-section-{{.ID}}" class="mt-4 border-t border-white/10 pt-4 hidden">
+						<div class="mb-3 flex items-center justify-between">
+							<h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+								<span>💬</span> Comments (<span id="comments-section-count-{{.ID}}">{{.CommentsCount}}</span>)
+							</h4>
+						</div>
+
+						<!-- Comments List -->
+						<div id="comments-list-{{.ID}}" class="space-y-2 mb-4">
+							{{if .Comments}}
+								{{range .Comments}}
+								<div class="rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-xs sm:text-sm">
+									<div class="flex items-center justify-between gap-2 mb-1">
+										<div class="flex items-center gap-2">
+											{{if .User.Avatar}}
+											<img src="{{.User.Avatar}}" alt="{{.User.Name}}" class="h-6 w-6 rounded-lg object-cover ring-1 ring-white/10">
+											{{else}}
+											<div class="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 text-[10px] font-bold text-white">
+												{{initials .User.Name}}
+											</div>
+											{{end}}
+											<span class="font-semibold text-white">{{.User.Name}}</span>
+										</div>
+										<time class="text-[10px] text-slate-500">{{formatTime .CreatedAt}}</time>
+									</div>
+									<p class="text-slate-200 whitespace-pre-wrap pl-8">{{.Text}}</p>
+								</div>
+								{{end}}
+							{{else}}
+								<p id="no-comments-{{.ID}}" class="text-xs text-slate-500 italic py-1">No comments yet. Be the first to share your reaction!</p>
+							{{end}}
+						</div>
+
+						<!-- Comment Input Form -->
+						{{if $.User}}
+						<form id="comment-form-{{.ID}}" data-id="{{.ID}}" onsubmit="submitComment(event, this)" action="/messages/{{.ID}}/comments" method="POST" class="flex gap-2">
+							<input type="text" id="comment-input-{{.ID}}" name="text" maxlength="1000" placeholder="Write a hilarious comment..." required
+								class="flex-1 rounded-xl border border-white/10 bg-black/40 px-3.5 py-2 text-xs text-white placeholder:text-slate-500 transition focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20">
+							<button type="submit" id="btn-submit-comment-{{.ID}}"
+								class="inline-flex items-center justify-center rounded-xl bg-violet-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-violet-500 active:scale-95">
+								Send
+							</button>
+						</form>
+						{{else}}
+						<div class="rounded-xl border border-white/5 bg-white/[0.02] p-2.5 text-center text-xs text-slate-400">
+							<a href="/login" class="font-semibold text-violet-400 hover:text-violet-300 underline">Sign in</a> to leave a comment.
+						</div>
+						{{end}}
 					</div>
 				</article>
 				{{end}}
 			</div>
 		</section>
 	</main>
+
+	<!-- Interactive Voting & Comments JavaScript -->
+	<script>
+		function toggleComments(el) {
+			const messageID = typeof el === 'object' ? el.dataset.id : el;
+			const section = document.getElementById('comments-section-' + messageID);
+			if (section) {
+				section.classList.toggle('hidden');
+				if (!section.classList.contains('hidden')) {
+					const input = document.getElementById('comment-input-' + messageID);
+					if (input) input.focus();
+				}
+			}
+		}
+
+		async function submitComment(event, el) {
+			event.preventDefault();
+			const messageID = typeof el === 'object' ? el.dataset.id : el;
+			const input = document.getElementById('comment-input-' + messageID);
+			if (!input) return;
+			const text = input.value.trim();
+			if (!text) return;
+
+			try {
+				const response = await fetch('/api/messages/' + messageID + '/comments', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Accept': 'application/json'
+					},
+					body: JSON.stringify({ text: text })
+				});
+
+				if (response.status === 401) {
+					window.location.href = '/login';
+					return;
+				}
+
+				if (!response.ok) {
+					const errText = await response.text();
+					alert('Could not post comment: ' + errText);
+					return;
+				}
+
+				const comment = await response.json();
+				appendCommentToUI(messageID, comment);
+				input.value = '';
+			} catch (err) {
+				console.error('Error posting comment:', err);
+			}
+		}
+
+		function appendCommentToUI(messageID, comment) {
+			const noCommentsNotice = document.getElementById('no-comments-' + messageID);
+			if (noCommentsNotice) {
+				noCommentsNotice.remove();
+			}
+
+			const list = document.getElementById('comments-list-' + messageID);
+			if (list) {
+				const item = document.createElement('div');
+				item.className = 'rounded-2xl border border-white/5 bg-white/[0.03] p-3 text-xs sm:text-sm';
+
+				const header = document.createElement('div');
+				header.className = 'flex items-center justify-between gap-2 mb-1';
+
+				const authorWrap = document.createElement('div');
+				authorWrap.className = 'flex items-center gap-2';
+
+				if (comment.user && comment.user.avatar) {
+					const img = document.createElement('img');
+					img.src = comment.user.avatar;
+					img.alt = comment.user.name || 'User';
+					img.className = 'h-6 w-6 rounded-lg object-cover ring-1 ring-white/10';
+					authorWrap.appendChild(img);
+				} else {
+					const avatarBadge = document.createElement('div');
+					avatarBadge.className = 'flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-cyan-400 text-[10px] font-bold text-white';
+					const initials = (comment.user && comment.user.name) ? comment.user.name.trim().split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
+					avatarBadge.textContent = initials;
+					authorWrap.appendChild(avatarBadge);
+				}
+
+				const nameSpan = document.createElement('span');
+				nameSpan.className = 'font-semibold text-white';
+				nameSpan.textContent = (comment.user && comment.user.name) ? comment.user.name : 'User';
+				authorWrap.appendChild(nameSpan);
+
+				const timeEl = document.createElement('time');
+				timeEl.className = 'text-[10px] text-slate-500';
+				timeEl.textContent = 'Just now';
+
+				header.appendChild(authorWrap);
+				header.appendChild(timeEl);
+
+				const bodyEl = document.createElement('p');
+				bodyEl.className = 'text-slate-200 whitespace-pre-wrap pl-8';
+				bodyEl.textContent = comment.text;
+
+				item.appendChild(header);
+				item.appendChild(bodyEl);
+				list.appendChild(item);
+			}
+
+			// Update counts
+			const countBtn = document.getElementById('comments-count-' + messageID);
+			const countSection = document.getElementById('comments-section-count-' + messageID);
+			const currentCount = parseInt(countBtn ? countBtn.textContent : '0', 10) || 0;
+			const newCount = currentCount + 1;
+			if (countBtn) countBtn.textContent = newCount;
+			if (countSection) countSection.textContent = newCount;
+		}
+
+		async function castVote(el, value) {
+			const messageID = typeof el === 'object' ? el.dataset.id : el;
+			try {
+				const response = await fetch('/api/messages/' + messageID + '/vote', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Accept': 'application/json'
+					},
+					body: JSON.stringify({ value: value })
+				});
+
+				if (response.status === 401) {
+					window.location.href = '/login';
+					return;
+				}
+
+				if (!response.ok) {
+					const text = await response.text();
+					console.error('Failed to vote:', text);
+					return;
+				}
+
+				const result = await response.json();
+				updateVoteUI(result);
+			} catch (err) {
+				console.error('Error casting vote:', err);
+			}
+		}
+
+		function updateVoteUI(res) {
+			const upCount = document.getElementById('upvotes-count-' + res.message_id);
+			const downCount = document.getElementById('downvotes-count-' + res.message_id);
+			const scoreBadge = document.getElementById('score-badge-' + res.message_id);
+			const upBtn = document.getElementById('btn-upvote-' + res.message_id);
+			const downBtn = document.getElementById('btn-downvote-' + res.message_id);
+
+			if (upCount) upCount.textContent = res.upvotes;
+			if (downCount) downCount.textContent = res.downvotes;
+
+			if (scoreBadge) {
+				scoreBadge.textContent = res.score;
+				scoreBadge.classList.remove('text-emerald-400', 'text-rose-400', 'text-slate-300');
+				if (res.score > 0) {
+					scoreBadge.classList.add('text-emerald-400');
+				} else if (res.score < 0) {
+					scoreBadge.classList.add('text-rose-400');
+				} else {
+					scoreBadge.classList.add('text-slate-300');
+				}
+			}
+
+			if (upBtn) {
+				if (res.user_vote === 1) {
+					upBtn.classList.add('vote-btn-active-up');
+				} else {
+					upBtn.classList.remove('vote-btn-active-up');
+				}
+			}
+
+			if (downBtn) {
+				if (res.user_vote === -1) {
+					downBtn.classList.add('vote-btn-active-down');
+				} else {
+					downBtn.classList.remove('vote-btn-active-down');
+				}
+			}
+		}
+
+		// Expand comments if navigating directly via hash
+		if (window.location.hash && window.location.hash.startsWith('#message-card-')) {
+			const targetId = window.location.hash.replace('#message-card-', '');
+			const section = document.getElementById('comments-section-' + targetId);
+			if (section) {
+				section.classList.remove('hidden');
+			}
+		}
+	</script>
 </body>
 
 </html>

@@ -250,3 +250,59 @@ func TestValidateMessageText(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateCommentText tests comment text validation rules using table-driven tests.
+func TestValidateCommentText(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      string
+		wantError error
+		wantValid bool
+	}{
+		{
+			name:      "valid comment",
+			text:      "LOL this is hilarious!",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid comment at exact max length",
+			text:      strings.Repeat("c", MaxCommentLength),
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "empty comment",
+			text:      "",
+			wantError: ErrEmptyComment,
+			wantValid: false,
+		},
+		{
+			name:      "whitespace only comment",
+			text:      "   \t\n",
+			wantError: ErrEmptyComment,
+			wantValid: false,
+		},
+		{
+			name:      "comment exceeds max length",
+			text:      strings.Repeat("x", MaxCommentLength+1),
+			wantError: ErrCommentTooLong,
+			wantValid: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateCommentText(tc.text)
+			if !errors.Is(err, tc.wantError) {
+				t.Fatalf("ValidateCommentText(%q) error = %v, wantError = %v", tc.text, err, tc.wantError)
+			}
+
+			valid := IsValidCommentText(tc.text)
+			if valid != tc.wantValid {
+				t.Fatalf("IsValidCommentText(%q) = %v, wantValid = %v", tc.text, valid, tc.wantValid)
+			}
+		})
+	}
+}

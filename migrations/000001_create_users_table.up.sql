@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS users (
+	id SERIAL PRIMARY KEY,
+	email TEXT,
+	name TEXT,
+	avatar TEXT
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users (email);

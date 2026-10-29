@@ -1,0 +1,19 @@
+CREATE TABLE IF NOT EXISTS messages (
+	id SERIAL PRIMARY KEY,
+	user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+	body TEXT NOT NULL,
+	media_url TEXT DEFAULT '',
+	upvotes INT NOT NULL DEFAULT 0,
+	downvotes INT NOT NULL DEFAULT 0,
+	status TEXT NOT NULL DEFAULT 'pending',
+	rejection_reason TEXT DEFAULT '',
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS rejection_reason TEXT DEFAULT '';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media_url TEXT DEFAULT '';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS upvotes INT NOT NULL DEFAULT 0;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS downvotes INT NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS messages_created_at_idx ON messages (created_at DESC);
+CREATE INDEX IF NOT EXISTS messages_status_idx ON messages (status);

@@ -1,4 +1,4 @@
-// Package repository defines data access interfaces and models for the guestbook application.
+// Package repository defines data access interfaces and models for the Meme Hub application.
 package repository
 
 import (
@@ -85,58 +85,75 @@ func TestPostgresRepository_Migrate(t *testing.T) {
 		{
 			name: "successful migration",
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
 					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS messages").
-					WillReturnResult(sqlmock.NewResult(0, 0))
+
+				migrationsList := []struct {
+					version   string
+					execRegex string
+				}{
+					{"000001_create_users_table", "CREATE TABLE IF NOT EXISTS users"},
+					{"000002_create_messages_table", "CREATE TABLE IF NOT EXISTS messages"},
+					{"000003_create_message_votes_table", "CREATE TABLE IF NOT EXISTS message_votes"},
+					{"000004_create_comments_table", "CREATE TABLE IF NOT EXISTS comments"},
+				}
+
+				for _, m := range migrationsList {
+					mock.ExpectQuery(regexp.QuoteMeta("SELECT 1 FROM schema_migrations WHERE version = $1")).
+						WithArgs(m.version).
+						WillReturnError(sql.ErrNoRows)
+					mock.ExpectBegin()
+					mock.ExpectExec(m.execRegex).
+						WillReturnResult(sqlmock.NewResult(0, 0))
+					mock.ExpectExec(regexp.QuoteMeta("INSERT INTO schema_migrations (version) VALUES ($1)")).
+						WithArgs(m.version).
+						WillReturnResult(sqlmock.NewResult(1, 1))
+					mock.ExpectCommit()
+				}
 			},
 			wantErr: false,
 		},
 		{
-			name: "error creating users table",
+			name: "already applied migrations skipped",
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
-					WillReturnError(errors.New("syntax error"))
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+
+				migrationsList := []string{
+					"000001_create_users_table",
+					"000002_create_messages_table",
+					"000003_create_message_votes_table",
+					"000004_create_comments_table",
+				}
+
+				for _, ver := range migrationsList {
+					mock.ExpectQuery(regexp.QuoteMeta("SELECT 1 FROM schema_migrations WHERE version = $1")).
+						WithArgs(ver).
+						WillReturnRows(sqlmock.NewRows([]string{"1"}).AddRow(1))
+				}
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
-			name: "error altering avatar column",
+			name: "error creating schema_migrations table",
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar").
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
 					WillReturnError(errors.New("permission denied"))
 			},
 			wantErr: true,
 		},
 		{
-			name: "error creating email index",
+			name: "migration execution error triggers rollback",
 			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT 1 FROM schema_migrations WHERE version = $1")).
+					WithArgs("000001_create_users_table").
+					WillReturnError(sql.ErrNoRows)
+				mock.ExpectBegin()
 				mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx").
-					WillReturnError(errors.New("index conflict"))
-			},
-			wantErr: true,
-		},
-		{
-			name: "error creating messages table",
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectExec("CREATE TABLE IF NOT EXISTS messages").
-					WillReturnError(errors.New("disk full"))
+					WillReturnError(errors.New("syntax error in sql"))
+				mock.ExpectRollback()
 			},
 			wantErr: true,
 		},
@@ -157,6 +174,79 @@ func TestPostgresRepository_Migrate(t *testing.T) {
 			err = repo.Migrate(context.Background())
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("repo.Migrate() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled sqlmock expectations: %v", err)
+			}
+		})
+	}
+}
+
+// TestPostgresRepository_MigrateDown tests schema rollback execution and error handling.
+func TestPostgresRepository_MigrateDown(t *testing.T) {
+	tests := []struct {
+		name      string
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name: "successful rollback of latest migration",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")).
+					WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("000004_create_comments_table"))
+				mock.ExpectBegin()
+				mock.ExpectExec("DROP TABLE IF EXISTS comments").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectExec(regexp.QuoteMeta("DELETE FROM schema_migrations WHERE version = $1")).
+					WithArgs("000004_create_comments_table").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectCommit()
+			},
+			wantErr: false,
+		},
+		{
+			name: "no migrations to revert returns nil",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")).
+					WillReturnError(sql.ErrNoRows)
+			},
+			wantErr: false,
+		},
+		{
+			name: "down migration error triggers rollback",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec("CREATE TABLE IF NOT EXISTS schema_migrations").
+					WillReturnResult(sqlmock.NewResult(0, 0))
+				mock.ExpectQuery(regexp.QuoteMeta("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")).
+					WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow("000004_create_comments_table"))
+				mock.ExpectBegin()
+				mock.ExpectExec("DROP TABLE IF EXISTS comments").
+					WillReturnError(errors.New("foreign key constraint error"))
+				mock.ExpectRollback()
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.mockSetup(mock)
+			repo := NewPostgresRepository(db)
+
+			err = repo.MigrateDown(context.Background())
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("repo.MigrateDown() error = %v, wantErr = %v", err, tc.wantErr)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Errorf("unfulfilled sqlmock expectations: %v", err)
@@ -248,34 +338,124 @@ func TestPostgresRepository_SaveUser(t *testing.T) {
 
 // TestPostgresRepository_CreateMessage tests inserting new messages into the database.
 func TestPostgresRepository_CreateMessage(t *testing.T) {
-	queryPattern := regexp.QuoteMeta(`INSERT INTO messages (user_id, body) VALUES ($1, $2)`)
+	queryPattern := regexp.QuoteMeta(`
+		INSERT INTO messages (user_id, body, media_url, status)
+		VALUES ($1, $2, $3, 'pending')
+		RETURNING id
+	`)
 
 	tests := []struct {
 		name      string
 		userID    int
 		text      string
+		mediaURL  string
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantID    int
+		wantErr   bool
+	}{
+		{
+			name:     "successful message creation with media",
+			userID:   1,
+			text:     "Hello guestbook!",
+			mediaURL: "https://example.com/cat.jpg",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(queryPattern).
+					WithArgs(1, "Hello guestbook!", "https://example.com/cat.jpg").
+					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
+			},
+			wantID:  42,
+			wantErr: false,
+		},
+		{
+			name:     "database execution error",
+			userID:   2,
+			text:     "Failing message",
+			mediaURL: "",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(queryPattern).
+					WithArgs(2, "Failing message", "").
+					WillReturnError(errors.New("foreign key violation"))
+			},
+			wantID:  0,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.mockSetup(mock)
+			repo := NewPostgresRepository(db)
+
+			id, err := repo.CreateMessage(context.Background(), tc.userID, tc.text, tc.mediaURL)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("repo.CreateMessage() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && id != tc.wantID {
+				t.Errorf("repo.CreateMessage() id = %d, want %d", id, tc.wantID)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled sqlmock expectations: %v", err)
+			}
+		})
+	}
+}
+
+// TestPostgresRepository_UpdateMessageStatus tests updating the moderation status and reason.
+func TestPostgresRepository_UpdateMessageStatus(t *testing.T) {
+	queryPattern := regexp.QuoteMeta(`
+		UPDATE messages
+		SET status = $1, rejection_reason = $2
+		WHERE id = $3
+	`)
+
+	tests := []struct {
+		name      string
+		messageID int
+		status    MessageStatus
+		reason    string
 		mockSetup func(mock sqlmock.Sqlmock)
 		wantErr   bool
 	}{
 		{
-			name:   "successful message creation",
-			userID: 1,
-			text:   "Hello guestbook!",
+			name:      "successful status update to approved",
+			messageID: 10,
+			status:    MessageStatusApproved,
+			reason:    "",
 			mockSetup: func(mock sqlmock.Sqlmock) {
 				mock.ExpectExec(queryPattern).
-					WithArgs(1, "Hello guestbook!").
+					WithArgs(string(MessageStatusApproved), "", 10).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 			},
 			wantErr: false,
 		},
 		{
-			name:   "database execution error",
-			userID: 2,
-			text:   "Failing message",
+			name:      "successful status update to rejected with reason",
+			messageID: 11,
+			status:    MessageStatusRejected,
+			reason:    "contains spam",
 			mockSetup: func(mock sqlmock.Sqlmock) {
 				mock.ExpectExec(queryPattern).
-					WithArgs(2, "Failing message").
-					WillReturnError(errors.New("foreign key violation"))
+					WithArgs(string(MessageStatusRejected), "contains spam", 11).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "database execution failure",
+			messageID: 12,
+			status:    MessageStatusRejected,
+			reason:    "spam",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(queryPattern).
+					WithArgs(string(MessageStatusRejected), "spam", 12).
+					WillReturnError(errors.New("database connection down"))
 			},
 			wantErr: true,
 		},
@@ -293,9 +473,9 @@ func TestPostgresRepository_CreateMessage(t *testing.T) {
 			tc.mockSetup(mock)
 			repo := NewPostgresRepository(db)
 
-			err = repo.CreateMessage(context.Background(), tc.userID, tc.text)
+			err = repo.UpdateMessageStatus(context.Background(), tc.messageID, tc.status, tc.reason)
 			if (err != nil) != tc.wantErr {
-				t.Fatalf("repo.CreateMessage() error = %v, wantErr = %v", err, tc.wantErr)
+				t.Fatalf("repo.UpdateMessageStatus() error = %v, wantErr = %v", err, tc.wantErr)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Errorf("unfulfilled sqlmock expectations: %v", err)
@@ -304,72 +484,105 @@ func TestPostgresRepository_CreateMessage(t *testing.T) {
 	}
 }
 
-// TestPostgresRepository_GetMessages tests retrieving messages with limit and scanning.
+// TestPostgresRepository_GetMessages tests retrieving messages with limit, sort, and scanning.
 func TestPostgresRepository_GetMessages(t *testing.T) {
-	queryPattern := regexp.QuoteMeta(`
-		SELECT m.id, m.body, m.created_at,
-		       u.id, COALESCE(u.email, ''), COALESCE(u.name, ''), COALESCE(u.avatar, '')
+	freshQueryPattern := regexp.QuoteMeta(`
+		SELECT m.id, m.body, COALESCE(m.media_url, ''), m.upvotes, m.downvotes,
+		       m.created_at, m.status, COALESCE(m.rejection_reason, ''),
+		       u.id, COALESCE(u.email, ''), COALESCE(u.name, ''), COALESCE(u.avatar, ''),
+		       COALESCE(v.value, 0)
 		FROM messages m
 		JOIN users u ON u.id = m.user_id
+		LEFT JOIN message_votes v ON v.message_id = m.id AND v.user_id = $1
+		WHERE m.status != 'rejected'
 		ORDER BY m.created_at DESC
-		LIMIT $1
+		LIMIT $2
+	`)
+
+	hotQueryPattern := regexp.QuoteMeta(`
+		SELECT m.id, m.body, COALESCE(m.media_url, ''), m.upvotes, m.downvotes,
+		       m.created_at, m.status, COALESCE(m.rejection_reason, ''),
+		       u.id, COALESCE(u.email, ''), COALESCE(u.name, ''), COALESCE(u.avatar, ''),
+		       COALESCE(v.value, 0)
+		FROM messages m
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN message_votes v ON v.message_id = m.id AND v.user_id = $1
+		WHERE m.status != 'rejected'
+		ORDER BY (m.upvotes - m.downvotes) DESC, m.created_at DESC
+		LIMIT $2
 	`)
 
 	now := time.Now().Truncate(time.Second)
+	columns := []string{
+		"id", "body", "media_url", "upvotes", "downvotes",
+		"created_at", "status", "rejection_reason",
+		"u_id", "u_email", "u_name", "u_avatar",
+		"user_vote",
+	}
 
 	tests := []struct {
 		name      string
+		userID    int
+		sortBy    string
 		limit     int
 		mockSetup func(mock sqlmock.Sqlmock)
 		wantCount int
 		wantErr   bool
 	}{
 		{
-			name:  "retrieve messages with positive limit",
-			limit: 10,
+			name:   "retrieve fresh messages",
+			userID: 1,
+			sortBy: "fresh",
+			limit:  10,
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"m_id", "m_body", "m_created_at", "u_id", "u_email", "u_name", "u_avatar"}).
-					AddRow(1, "First message", now, 10, "alice@example.com", "Alice", "avatar1.png").
-					AddRow(2, "Second message", now.Add(time.Minute), 20, "bob@example.com", "Bob", "")
-				mock.ExpectQuery(queryPattern).
-					WithArgs(10).
+				rows := sqlmock.NewRows(columns).
+					AddRow(1, "First", "https://img.jpg", 5, 1, now, "approved", "", 10, "alice@example.com", "Alice", "a.png", 1).
+					AddRow(2, "Second", "", 0, 0, now.Add(time.Minute), "pending", "", 20, "bob@example.com", "Bob", "", 0)
+				mock.ExpectQuery(freshQueryPattern).
+					WithArgs(1, 10).
 					WillReturnRows(rows)
 			},
 			wantCount: 2,
 			wantErr:   false,
 		},
 		{
-			name:  "limit <= 0 defaults to 100",
-			limit: 0,
+			name:   "retrieve hot messages",
+			userID: 2,
+			sortBy: "hot",
+			limit:  10,
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"m_id", "m_body", "m_created_at", "u_id", "u_email", "u_name", "u_avatar"})
-				mock.ExpectQuery(queryPattern).
-					WithArgs(100).
+				rows := sqlmock.NewRows(columns).
+					AddRow(1, "Top meme", "https://video.mp4", 10, 2, now, "approved", "", 10, "alice@example.com", "Alice", "a.png", -1)
+				mock.ExpectQuery(hotQueryPattern).
+					WithArgs(2, 10).
+					WillReturnRows(rows)
+			},
+			wantCount: 1,
+			wantErr:   false,
+		},
+		{
+			name:   "limit <= 0 defaults to 100",
+			userID: 0,
+			sortBy: "fresh",
+			limit:  0,
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				rows := sqlmock.NewRows(columns)
+				mock.ExpectQuery(freshQueryPattern).
+					WithArgs(0, 100).
 					WillReturnRows(rows)
 			},
 			wantCount: 0,
 			wantErr:   false,
 		},
 		{
-			name:  "query execution error",
-			limit: 5,
+			name:   "query execution error",
+			userID: 1,
+			sortBy: "fresh",
+			limit:  5,
 			mockSetup: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(queryPattern).
-					WithArgs(5).
+				mock.ExpectQuery(freshQueryPattern).
+					WithArgs(1, 5).
 					WillReturnError(errors.New("table not found"))
-			},
-			wantCount: 0,
-			wantErr:   true,
-		},
-		{
-			name:  "row scanning error",
-			limit: 5,
-			mockSetup: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{"m_id", "m_body"}).
-					AddRow(1, "Incomplete row")
-				mock.ExpectQuery(queryPattern).
-					WithArgs(5).
-					WillReturnRows(rows)
 			},
 			wantCount: 0,
 			wantErr:   true,
@@ -388,7 +601,7 @@ func TestPostgresRepository_GetMessages(t *testing.T) {
 			tc.mockSetup(mock)
 			repo := NewPostgresRepository(db)
 
-			msgs, err := repo.GetMessages(context.Background(), tc.limit)
+			msgs, err := repo.GetMessages(context.Background(), tc.userID, tc.sortBy, tc.limit)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("repo.GetMessages() error = %v, wantErr = %v", err, tc.wantErr)
 			}
@@ -400,4 +613,228 @@ func TestPostgresRepository_GetMessages(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPostgresRepository_VoteMessage tests applying, toggling, and updating user votes.
+func TestPostgresRepository_VoteMessage(t *testing.T) {
+	t.Run("invalid vote value returns error", func(t *testing.T) {
+		db, _, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		repo := NewPostgresRepository(db)
+		_, err = repo.VoteMessage(context.Background(), 1, 1, 0)
+		if err == nil {
+			t.Fatal("expected error for invalid vote value 0, got nil")
+		}
+	})
+
+	t.Run("new upvote transaction commits successfully", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		mock.ExpectBegin()
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT value FROM message_votes WHERE message_id = $1 AND user_id = $2 FOR UPDATE`)).
+			WithArgs(10, 5).
+			WillReturnError(sql.ErrNoRows)
+		mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO message_votes (message_id, user_id, value) VALUES ($1, $2, $3)`)).
+			WithArgs(10, 5, 1).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(regexp.QuoteMeta(`UPDATE messages SET upvotes = upvotes + 1 WHERE id = $1`)).
+			WithArgs(10).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectQuery(regexp.QuoteMeta(`SELECT upvotes, downvotes FROM messages WHERE id = $1`)).
+			WithArgs(10).
+			WillReturnRows(sqlmock.NewRows([]string{"upvotes", "downvotes"}).AddRow(1, 0))
+		mock.ExpectCommit()
+
+		repo := NewPostgresRepository(db)
+		res, err := repo.VoteMessage(context.Background(), 10, 5, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.UserVote != 1 || res.Score != 1 || res.Upvotes != 1 {
+			t.Errorf("unexpected vote result: %+v", res)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unfulfilled sqlmock expectations: %v", err)
+		}
+	})
+}
+
+// TestPostgresRepository_CreateComment tests inserting comments and mapping author details.
+func TestPostgresRepository_CreateComment(t *testing.T) {
+	tests := []struct {
+		name      string
+		messageID int
+		userID    int
+		text      string
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantErr   bool
+	}{
+		{
+			name:      "successful comment creation",
+			messageID: 10,
+			userID:    5,
+			text:      "Hilarious meme!",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				cols := []string{"id", "message_id", "body", "created_at", "user_id", "email", "name", "avatar"}
+				mock.ExpectQuery("WITH inserted AS").
+					WithArgs(10, 5, "Hilarious meme!").
+					WillReturnRows(sqlmock.NewRows(cols).AddRow(1, 10, "Hilarious meme!", time.Now(), 5, "alice@example.com", "Alice", "https://avatar.com/a.png"))
+			},
+			wantErr: false,
+		},
+		{
+			name:      "database query error",
+			messageID: 10,
+			userID:    5,
+			text:      "Hilarious meme!",
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery("WITH inserted AS").
+					WithArgs(10, 5, "Hilarious meme!").
+					WillReturnError(errors.New("db error"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.mockSetup(mock)
+			repo := NewPostgresRepository(db)
+
+			comment, err := repo.CreateComment(context.Background(), tc.messageID, tc.userID, tc.text)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("repo.CreateComment() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if !tc.wantErr && comment.ID != 1 {
+				t.Errorf("expected comment ID 1, got %d", comment.ID)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled sqlmock expectations: %v", err)
+			}
+		})
+	}
+}
+
+// TestPostgresRepository_GetCommentsByMessageID tests retrieving comments for a single message.
+func TestPostgresRepository_GetCommentsByMessageID(t *testing.T) {
+	tests := []struct {
+		name      string
+		messageID int
+		mockSetup func(mock sqlmock.Sqlmock)
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			name:      "successful retrieval of comments",
+			messageID: 10,
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				cols := []string{"id", "message_id", "body", "created_at", "user_id", "email", "name", "avatar"}
+				mock.ExpectQuery(regexp.QuoteMeta(`SELECT c.id, c.message_id, c.body, c.created_at`)).
+					WithArgs(10).
+					WillReturnRows(sqlmock.NewRows(cols).
+						AddRow(1, 10, "First", time.Now(), 5, "u5@ex.com", "U5", "").
+						AddRow(2, 10, "Second", time.Now(), 6, "u6@ex.com", "U6", ""))
+			},
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:      "database query error",
+			messageID: 10,
+			mockSetup: func(mock sqlmock.Sqlmock) {
+				mock.ExpectQuery(regexp.QuoteMeta(`SELECT c.id, c.message_id, c.body, c.created_at`)).
+					WithArgs(10).
+					WillReturnError(errors.New("connection closed"))
+			},
+			wantCount: 0,
+			wantErr:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			tc.mockSetup(mock)
+			repo := NewPostgresRepository(db)
+
+			comments, err := repo.GetCommentsByMessageID(context.Background(), tc.messageID)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("repo.GetCommentsByMessageID() error = %v, wantErr = %v", err, tc.wantErr)
+			}
+			if len(comments) != tc.wantCount {
+				t.Errorf("expected %d comments, got %d", tc.wantCount, len(comments))
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled sqlmock expectations: %v", err)
+			}
+		})
+	}
+}
+
+// TestPostgresRepository_GetCommentsByMessageIDs tests batch comment retrieval and grouping.
+func TestPostgresRepository_GetCommentsByMessageIDs(t *testing.T) {
+	t.Run("empty message IDs returns empty map immediately", func(t *testing.T) {
+		db, _, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		repo := NewPostgresRepository(db)
+		res, err := repo.GetCommentsByMessageIDs(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 0 {
+			t.Errorf("expected empty map, got %v", res)
+		}
+	})
+
+	t.Run("successful batch retrieval grouped by message id", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer db.Close()
+
+		cols := []string{"id", "message_id", "body", "created_at", "user_id", "email", "name", "avatar"}
+		mock.ExpectQuery("SELECT c.id, c.message_id, c.body, c.created_at").
+			WithArgs(10, 20).
+			WillReturnRows(sqlmock.NewRows(cols).
+				AddRow(1, 10, "Comment for 10", time.Now(), 5, "u5@ex.com", "U5", "").
+				AddRow(2, 20, "Comment for 20", time.Now(), 6, "u6@ex.com", "U6", ""))
+
+		repo := NewPostgresRepository(db)
+		res, err := repo.GetCommentsByMessageIDs(context.Background(), []int{10, 20})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res[10]) != 1 || len(res[20]) != 1 {
+			t.Errorf("unexpected grouping result: %+v", res)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unfulfilled sqlmock expectations: %v", err)
+		}
+	})
 }

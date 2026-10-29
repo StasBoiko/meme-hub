@@ -3,7 +3,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,17 +18,41 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"guestbook-app/internal/config"
-	"guestbook-app/internal/repository"
+	"meme-hub/internal/broker"
+	"meme-hub/internal/config"
+	"meme-hub/internal/repository"
+	"meme-hub/internal/search"
 )
+
+// mockSearchService implements search.Service for handler unit tests.
+type mockSearchService struct {
+	results   []search.Document
+	searchErr error
+}
+
+func (m *mockSearchService) IndexMessage(ctx context.Context, doc search.Document) error {
+	return nil
+}
+
+func (m *mockSearchService) SearchMessages(ctx context.Context, query string, limit int) ([]search.Document, error) {
+	return m.results, m.searchErr
+}
+
+func (m *mockSearchService) Ping(ctx context.Context) error {
+	return nil
+}
 
 // mockRepository is an in-memory implementation of the Repository interface for testing.
 type mockRepository struct {
 	messages         []repository.MessageDTO
+	comments         []repository.CommentDTO
 	getMessagesErr   error
 	createMessageErr error
 	saveUserErr      error
 	pingErr          error
+	voteErr          error
+	commentErr       error
+	votes            map[string]int
 }
 
 // Ping simulates database connectivity check or returns a configured error.
@@ -42,29 +68,173 @@ func (m *mockRepository) SaveUser(ctx context.Context, email, name, avatar strin
 	return repository.SessionUser{ID: 1, Email: email, Name: name, Avatar: avatar}, nil
 }
 
-// CreateMessage simulates saving a message in memory or returns a configured error.
-func (m *mockRepository) CreateMessage(ctx context.Context, userID int, text string) error {
+// CreateMessage simulates saving a message in memory and returns a mock message ID or configured error.
+func (m *mockRepository) CreateMessage(ctx context.Context, userID int, text string, mediaURL string) (int, error) {
 	if m.createMessageErr != nil {
-		return m.createMessageErr
+		return 0, m.createMessageErr
 	}
 	m.messages = append(m.messages, repository.MessageDTO{
 		ID:        len(m.messages) + 1,
 		Text:      text,
+		MediaURL:  mediaURL,
 		CreatedAt: time.Now(),
+		Status:    repository.MessageStatusPending,
 		User:      repository.SessionUser{ID: userID, Name: "Tester"},
 	})
+	return len(m.messages), nil
+}
+
+// UpdateMessageStatus simulates updating message status in memory.
+func (m *mockRepository) UpdateMessageStatus(ctx context.Context, messageID int, status repository.MessageStatus, reason string) error {
+	for i := range m.messages {
+		if m.messages[i].ID == messageID {
+			m.messages[i].Status = status
+			m.messages[i].RejectionReason = reason
+			return nil
+		}
+	}
 	return nil
 }
 
+// VoteMessage simulates voting on a message in memory.
+func (m *mockRepository) VoteMessage(ctx context.Context, messageID int, userID int, value int) (repository.VoteResult, error) {
+	if m.voteErr != nil {
+		return repository.VoteResult{}, m.voteErr
+	}
+	if value != 1 && value != -1 {
+		return repository.VoteResult{}, errors.New("invalid vote")
+	}
+	if m.votes == nil {
+		m.votes = make(map[string]int)
+	}
+	key := fmt.Sprintf("%d:%d", messageID, userID)
+	existing := m.votes[key]
+	var userVote int
+	var upDelta, downDelta int
+	if existing == 0 {
+		m.votes[key] = value
+		userVote = value
+		if value == 1 {
+			upDelta = 1
+		} else {
+			downDelta = 1
+		}
+	} else if existing == value {
+		delete(m.votes, key)
+		userVote = 0
+		if value == 1 {
+			upDelta = -1
+		} else {
+			downDelta = -1
+		}
+	} else {
+		m.votes[key] = value
+		userVote = value
+		if value == 1 {
+			upDelta = 1
+			downDelta = -1
+		} else {
+			upDelta = -1
+			downDelta = 1
+		}
+	}
+
+	for i := range m.messages {
+		if m.messages[i].ID == messageID {
+			m.messages[i].Upvotes += upDelta
+			m.messages[i].Downvotes += downDelta
+			m.messages[i].Score = m.messages[i].Upvotes - m.messages[i].Downvotes
+			return repository.VoteResult{
+				MessageID: messageID,
+				Upvotes:   m.messages[i].Upvotes,
+				Downvotes: m.messages[i].Downvotes,
+				Score:     m.messages[i].Score,
+				UserVote:  userVote,
+			}, nil
+		}
+	}
+
+	return repository.VoteResult{
+		MessageID: messageID,
+		Upvotes:   max(0, upDelta),
+		Downvotes: max(0, downDelta),
+		Score:     upDelta - downDelta,
+		UserVote:  userVote,
+	}, nil
+}
+
 // GetMessages simulates retrieving messages from memory or returns a configured error.
-func (m *mockRepository) GetMessages(ctx context.Context, limit int) ([]repository.MessageDTO, error) {
+func (m *mockRepository) GetMessages(ctx context.Context, currentUserID int, sortBy string, limit int) ([]repository.MessageDTO, error) {
 	if m.getMessagesErr != nil {
 		return nil, m.getMessagesErr
 	}
-	if limit > 0 && len(m.messages) > limit {
-		return m.messages[:limit], nil
+	result := make([]repository.MessageDTO, len(m.messages))
+	copy(result, m.messages)
+	for i := range result {
+		if m.votes != nil {
+			key := fmt.Sprintf("%d:%d", result[i].ID, currentUserID)
+			result[i].UserVote = m.votes[key]
+		}
 	}
-	return m.messages, nil
+	if limit > 0 && len(result) > limit {
+		return result[:limit], nil
+	}
+	return result, nil
+}
+
+// CreateComment simulates creating a comment in memory.
+func (m *mockRepository) CreateComment(ctx context.Context, messageID int, userID int, text string) (repository.CommentDTO, error) {
+	if m.commentErr != nil {
+		return repository.CommentDTO{}, m.commentErr
+	}
+	c := repository.CommentDTO{
+		ID:        len(m.comments) + 1,
+		MessageID: messageID,
+		Text:      text,
+		CreatedAt: time.Now(),
+		User:      repository.SessionUser{ID: userID, Name: "Commenter"},
+	}
+	m.comments = append(m.comments, c)
+	for i := range m.messages {
+		if m.messages[i].ID == messageID {
+			m.messages[i].Comments = append(m.messages[i].Comments, c)
+			m.messages[i].CommentsCount++
+		}
+	}
+	return c, nil
+}
+
+// GetCommentsByMessageIDs simulates retrieving comments grouped by message IDs.
+func (m *mockRepository) GetCommentsByMessageIDs(ctx context.Context, messageIDs []int) (map[int][]repository.CommentDTO, error) {
+	if m.commentErr != nil {
+		return nil, m.commentErr
+	}
+	result := make(map[int][]repository.CommentDTO)
+	for _, id := range messageIDs {
+		result[id] = make([]repository.CommentDTO, 0)
+	}
+	for _, c := range m.comments {
+		for _, id := range messageIDs {
+			if c.MessageID == id {
+				result[id] = append(result[id], c)
+			}
+		}
+	}
+	return result, nil
+}
+
+// GetCommentsByMessageID simulates retrieving comments for a single message ID.
+func (m *mockRepository) GetCommentsByMessageID(ctx context.Context, messageID int) ([]repository.CommentDTO, error) {
+	if m.commentErr != nil {
+		return nil, m.commentErr
+	}
+	result := make([]repository.CommentDTO, 0)
+	for _, c := range m.comments {
+		if c.MessageID == messageID {
+			result = append(result, c)
+		}
+	}
+	return result, nil
 }
 
 // newTestServer creates an initialized server instance with a mock repository for testing.
@@ -82,7 +252,7 @@ func newTestServer(t *testing.T, repo repository.Repository) *Server {
 			CookieName: "session",
 			Duration:   7 * 24 * time.Hour,
 		},
-	}, repo, tmpl, sessions)
+	}, repo, tmpl, sessions, broker.NewNopPublisher(), search.NewNopService())
 }
 
 // TestHandleHealthz tests GET /healthz behavior under various conditions using table-driven tests.
@@ -950,4 +1120,591 @@ func TestConcurrentSessions(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// mockPublisher records tasks published during handler tests.
+type mockPublisher struct {
+	tasks      []broker.ModerationTask
+	emailTasks []broker.EmailTask
+	err        error
+}
+
+func (m *mockPublisher) PublishModerationTask(ctx context.Context, task broker.ModerationTask) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.tasks = append(m.tasks, task)
+	return nil
+}
+
+func (m *mockPublisher) PublishEmailTask(ctx context.Context, task broker.EmailTask) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.emailTasks = append(m.emailTasks, task)
+	return nil
+}
+
+func (m *mockPublisher) Close() error {
+	return nil
+}
+
+// TestHandleMessages_PublisherInvoked verifies that submitting a new message triggers task publication to the broker.
+func TestHandleMessages_PublisherInvoked(t *testing.T) {
+	repo := &mockRepository{}
+	tmpl, err := NewTemplate("../../web/template/index.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+	sessions := repository.NewMemorySessionStore()
+	pub := &mockPublisher{}
+
+	s := New(config.Config{
+		Port: "8080",
+		Session: config.SessionConfig{
+			CookieName: "session",
+			Duration:   time.Hour,
+		},
+	}, repo, tmpl, sessions, pub, search.NewNopService())
+
+	_ = sessions.Set(context.Background(), "test-sid", repository.SessionUser{ID: 99, Name: "Tester"}, time.Hour)
+
+	form := url.Values{}
+	form.Set("text", "A wonderful guest message for testing publisher.")
+
+	req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: "session", Value: "test-sid"})
+
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected status %d, got %d", http.StatusSeeOther, rec.Code)
+	}
+
+	if len(pub.tasks) != 1 {
+		t.Fatalf("expected 1 published moderation task, got %d", len(pub.tasks))
+	}
+
+	if pub.tasks[0].UserID != 99 {
+		t.Errorf("task.UserID = %d, want 99", pub.tasks[0].UserID)
+	}
+	if pub.tasks[0].Text != "A wonderful guest message for testing publisher." {
+		t.Errorf("task.Text = %q, want expected message", pub.tasks[0].Text)
+	}
+}
+
+// TestHandleCallback_WelcomeEmailDispatched verifies that successful login triggers a welcome email task.
+func TestHandleCallback_WelcomeEmailDispatched(t *testing.T) {
+	repo := &mockRepository{}
+	tmpl, err := NewTemplate("../../web/template/index.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+	sessions := repository.NewMemorySessionStore()
+	pub := &mockPublisher{}
+
+	s := New(config.Config{
+		Port: "8080",
+		Session: config.SessionConfig{
+			CookieName: "session",
+			Duration:   time.Hour,
+		},
+	}, repo, tmpl, sessions, pub, search.NewNopService())
+
+	transport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if strings.Contains(req.URL.String(), "userinfo") {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"email":"newuser@example.com","name":"New User","picture":"https://pic.jpg"}`)),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"access_token":"mock-token","token_type":"Bearer"}`)),
+		}, nil
+	})
+
+	mockHTTPClient := &http.Client{Transport: transport}
+	req := httptest.NewRequest(http.MethodGet, "/callback?state=teststate&code=testcode", nil)
+	req.AddCookie(&http.Cookie{Name: "oauth_state", Value: "teststate"})
+	ctx := context.WithValue(req.Context(), oauth2.HTTPClient, mockHTTPClient)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
+	}
+
+	if len(pub.emailTasks) != 1 {
+		t.Fatalf("expected 1 published email task, got %d", len(pub.emailTasks))
+	}
+
+	if pub.emailTasks[0].To[0] != "newuser@example.com" {
+		t.Errorf("email task recipient = %q, want %q", pub.emailTasks[0].To[0], "newuser@example.com")
+	}
+	if pub.emailTasks[0].Subject != "Welcome to Smart Guestbook!" {
+		t.Errorf("email task subject = %q, want %q", pub.emailTasks[0].Subject, "Welcome to Smart Guestbook!")
+	}
+}
+
+// TestHandleIndex_SearchQuery tests searching entries via query parameter q.
+func TestHandleIndex_SearchQuery(t *testing.T) {
+	repo := &mockRepository{
+		messages: []repository.MessageDTO{
+			{ID: 1, Text: "Fallback message from DB", Status: repository.MessageStatusApproved},
+		},
+	}
+	tmpl, err := NewTemplate("../../web/template/index.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		queryURL       string
+		searcher       search.Service
+		wantBodySubstr string
+	}{
+		{
+			name:     "matching search result rendered",
+			queryURL: "/?q=golang",
+			searcher: &mockSearchService{
+				results: []search.Document{
+					{ID: 10, Author: "Gopher", Text: "Golang search hit!"},
+				},
+			},
+			wantBodySubstr: "Golang search hit!",
+		},
+		{
+			name:     "search failure falls back to database entries",
+			queryURL: "/?q=error",
+			searcher: &mockSearchService{
+				searchErr: errors.New("es down"),
+			},
+			wantBodySubstr: "Fallback message from DB",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			s := New(config.Config{
+				Port: "8080",
+				Session: config.SessionConfig{
+					CookieName: "session",
+					Duration:   time.Hour,
+				},
+			}, repo, tmpl, repository.NewMemorySessionStore(), broker.NewNopPublisher(), tc.searcher)
+
+			req := httptest.NewRequest(http.MethodGet, tc.queryURL, nil)
+			rec := httptest.NewRecorder()
+			s.Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+			}
+			if !strings.Contains(rec.Body.String(), tc.wantBodySubstr) {
+				t.Errorf("body missing substring %q", tc.wantBodySubstr)
+			}
+		})
+	}
+}
+
+// TestHandleAPIMessages_SearchQuery tests searching entries via /api/messages?q=...
+func TestHandleAPIMessages_SearchQuery(t *testing.T) {
+	repo := &mockRepository{}
+	tmpl, err := NewTemplate("../../web/template/index.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	srch := &mockSearchService{
+		results: []search.Document{
+			{ID: 20, Author: "ElasticUser", Text: "API search message"},
+		},
+	}
+
+	s := New(config.Config{
+		Port: "8080",
+		Session: config.SessionConfig{
+			CookieName: "session",
+			Duration:   time.Hour,
+		},
+	}, repo, tmpl, repository.NewMemorySessionStore(), broker.NewNopPublisher(), srch)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/messages?q=API", nil)
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "API search message") {
+		t.Errorf("expected json response to contain %q, got %s", "API search message", rec.Body.String())
+	}
+}
+
+// TestHandleVote tests message voting via API and form submissions.
+func TestHandleVote(t *testing.T) {
+	repo := &mockRepository{
+		messages: []repository.MessageDTO{
+			{ID: 1, Text: "Meme 1", Upvotes: 0, Downvotes: 0, Score: 0},
+		},
+	}
+	s := newTestServer(t, repo)
+
+	sessionID := "vote-session"
+	_ = s.sessions.Set(context.Background(), sessionID, repository.SessionUser{ID: 10, Name: "Voter"}, time.Hour)
+
+	t.Run("authenticated JSON upvote succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/vote", strings.NewReader(`{"value":1}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `"user_vote":1`) {
+			t.Errorf("expected user_vote 1 in response, got %s", rec.Body.String())
+		}
+	})
+
+	t.Run("unauthenticated vote returns 401 Unauthorized for JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/vote", strings.NewReader(`{"value":1}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("invalid vote value returns 400 Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/vote", strings.NewReader(`{"value":5}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("form vote submission redirects", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("value", "1")
+		req := httptest.NewRequest(http.MethodPost, "/messages/1/vote", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("expected status 303 See Other, got %d", rec.Code)
+		}
+	})
+}
+
+// TestHandleMessages_WithMediaURL tests creating a message with optional media URL.
+func TestHandleMessages_WithMediaURL(t *testing.T) {
+	repo := &mockRepository{}
+	s := newTestServer(t, repo)
+
+	sessionID := "media-session"
+	_ = s.sessions.Set(context.Background(), sessionID, repository.SessionUser{ID: 15, Name: "Poster"}, time.Hour)
+
+	t.Run("valid media url accepted", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "Check this funny cat!")
+		form.Set("media_url", "https://example.com/cat.gif")
+
+		req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("expected status 303 See Other, got %d", rec.Code)
+		}
+		if len(repo.messages) == 0 || repo.messages[len(repo.messages)-1].MediaURL != "https://example.com/cat.gif" {
+			t.Errorf("media_url was not stored properly")
+		}
+	})
+
+	t.Run("invalid url scheme rejected", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "Bad scheme")
+		form.Set("media_url", "ftp://example.com/file.mp4")
+
+		req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+}
+
+// TestIsImageURL tests detection of image file formats.
+func TestIsImageURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://example.com/pic.png", true},
+		{"https://example.com/photo.JPG", true},
+		{"https://example.com/anim.gif?size=large", true},
+		{"https://example.com/art.webp", true},
+		{"https://example.com/video.mp4", false},
+		{"https://youtube.com/watch?v=123", false},
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		got := IsImageURL(tc.url)
+		if got != tc.want {
+			t.Errorf("IsImageURL(%q) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+}
+
+// TestIsVideoURL tests detection of video file formats.
+func TestIsVideoURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://example.com/clip.mp4", true},
+		{"https://example.com/clip.webm?source=web", true},
+		{"https://example.com/pic.jpg", false},
+		{"https://youtube.com/watch?v=abc", false},
+		{"", false},
+	}
+
+	for _, tc := range tests {
+		got := IsVideoURL(tc.url)
+		if got != tc.want {
+			t.Errorf("IsVideoURL(%q) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+}
+
+// TestYouTubeEmbedURL tests generation of YouTube embed iframe URLs.
+func TestYouTubeEmbedURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
+		{"https://youtu.be/dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
+		{"https://youtube.com/shorts/dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
+		{"https://example.com/video.mp4", ""},
+		{"", ""},
+	}
+
+	for _, tc := range tests {
+		got := YouTubeEmbedURL(tc.url)
+		if got != tc.want {
+			t.Errorf("YouTubeEmbedURL(%q) = %q, want %q", tc.url, got, tc.want)
+		}
+	}
+}
+
+// TestHandleCreateComment tests creating comments under meme messages.
+func TestHandleCreateComment(t *testing.T) {
+	repo := &mockRepository{
+		messages: []repository.MessageDTO{
+			{ID: 1, Text: "Meme 1", Status: repository.MessageStatusApproved},
+		},
+	}
+	s := newTestServer(t, repo)
+
+	sessionID := "comment-session"
+	_ = s.sessions.Set(context.Background(), sessionID, repository.SessionUser{ID: 25, Name: "MemeCritic"}, time.Hour)
+
+	t.Run("authenticated JSON comment succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/comments", strings.NewReader(`{"text":"Great meme!"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected status 201 Created, got %d (body: %s)", rec.Code, rec.Body.String())
+		}
+		var c repository.CommentDTO
+		if err := json.NewDecoder(rec.Body).Decode(&c); err != nil {
+			t.Fatalf("failed to decode comment json: %v", err)
+		}
+		if c.Text != "Great meme!" || c.User.ID != 25 {
+			t.Errorf("unexpected comment DTO: %+v", c)
+		}
+	})
+
+	t.Run("unauthenticated comment returns 401 for JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/comments", strings.NewReader(`{"text":"Hello"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+		}
+	})
+
+	t.Run("unauthenticated comment redirects to login for form", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "Hello")
+		req := httptest.NewRequest(http.MethodPost, "/messages/1/comments", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("expected status 303 See Other, got %d", rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/login" {
+			t.Errorf("expected redirect to /login, got %s", loc)
+		}
+	})
+
+	t.Run("empty comment text returns 400 Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/comments", strings.NewReader(`{"text":"   "}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("comment exceeding max length returns 400 Bad Request", func(t *testing.T) {
+		longText := strings.Repeat("A", 1001)
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/1/comments", strings.NewReader(fmt.Sprintf(`{"text":%q}`, longText)))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("form comment submission redirects to card", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "Nice punchline!")
+		req := httptest.NewRequest(http.MethodPost, "/messages/1/comments", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("expected status 303 See Other, got %d", rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/#message-card-1" {
+			t.Errorf("expected redirect to /#message-card-1, got %s", loc)
+		}
+	})
+
+	t.Run("invalid message ID returns 400 Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/messages/invalid/comments", strings.NewReader(`{"text":"test"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+}
+
+// TestHandleGetComments tests retrieving comments for a message via JSON API.
+func TestHandleGetComments(t *testing.T) {
+	repo := &mockRepository{
+		comments: []repository.CommentDTO{
+			{
+				ID:        1,
+				MessageID: 10,
+				Text:      "First comment",
+				CreatedAt: time.Now(),
+				User:      repository.SessionUser{ID: 1, Name: "Alice"},
+			},
+			{
+				ID:        2,
+				MessageID: 10,
+				Text:      "Second comment",
+				CreatedAt: time.Now(),
+				User:      repository.SessionUser{ID: 2, Name: "Bob"},
+			},
+		},
+	}
+	s := newTestServer(t, repo)
+
+	t.Run("successful JSON retrieval of comments", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/messages/10/comments", nil)
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK, got %d", rec.Code)
+		}
+		var list []repository.CommentDTO
+		if err := json.NewDecoder(rec.Body).Decode(&list); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if len(list) != 2 {
+			t.Fatalf("expected 2 comments, got %d", len(list))
+		}
+		if list[0].Text != "First comment" || list[1].Text != "Second comment" {
+			t.Errorf("unexpected comment texts: %+v", list)
+		}
+	})
+
+	t.Run("invalid message id returns 400 Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/messages/abc/comments", nil)
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
 }
