@@ -1,4 +1,4 @@
-// Package main is the entry point for the guestbook application server.
+// Package main is the entry point for the meme-hub application server.
 package main
 
 import (
@@ -110,16 +110,16 @@ func main() {
 	}
 
 	var searchService search.Service = search.NewNopService()
-	esClient, err := search.NewClient(cfg.ElasticsearchURL)
+	zincClient, err := search.NewClientWithAuth(cfg.SearchURL, cfg.SearchUser, cfg.SearchPassword, search.DefaultIndex, nil)
 	if err != nil {
-		slog.Warn("could not initialize elasticsearch client, using nop searcher", "err", err)
+		slog.Warn("could not initialize zincsearch client, using nop searcher", "err", err)
 	} else {
 		pingCtx, pingCancel := context.WithTimeout(context.Background(), 3*time.Second)
-		if pingErr := esClient.Ping(pingCtx); pingErr != nil {
-			slog.Warn("elasticsearch ping failed, search will operate with fallback", "err", pingErr)
+		if pingErr := zincClient.Ping(pingCtx); pingErr != nil {
+			slog.Warn("zincsearch ping failed, search will operate with fallback", "err", pingErr)
 		} else {
-			slog.Info("connected to elasticsearch successfully", "url", cfg.ElasticsearchURL)
-			searchService = esClient
+			slog.Info("connected to zincsearch successfully", "url", cfg.SearchURL)
+			searchService = zincClient
 		}
 		pingCancel()
 	}

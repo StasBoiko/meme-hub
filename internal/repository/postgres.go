@@ -164,6 +164,23 @@ func (r *PostgresRepository) SaveUser(ctx context.Context, email, name, avatar s
 	return user, nil
 }
 
+// GetUserByID retrieves a user record by its primary key ID.
+func (r *PostgresRepository) GetUserByID(ctx context.Context, id int) (SessionUser, error) {
+	var user SessionUser
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, email, name, COALESCE(avatar, '')
+		FROM users
+		WHERE id = $1
+	`, id).Scan(&user.ID, &user.Email, &user.Name, &user.Avatar)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SessionUser{}, ErrNotFound
+		}
+		return SessionUser{}, fmt.Errorf("getting user by id %d: %w", id, err)
+	}
+	return user, nil
+}
+
 // CreateMessage inserts a new guest message into the database and returns its ID.
 func (r *PostgresRepository) CreateMessage(ctx context.Context, userID int, text string, mediaURL string) (int, error) {
 	var id int

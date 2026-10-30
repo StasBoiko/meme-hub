@@ -106,7 +106,9 @@ func TestLoadCustomEnv(t *testing.T) {
 				"SMTP_PASS":            "custom_pass",
 				"SMTP_FROM":            "alerts@custom.com",
 				"ADMIN_EMAIL":          "owner@custom.com",
-				"ELASTICSEARCH_URL":    "http://es.custom.com:9200",
+				"SEARCH_URL":           "http://zinc.custom.com:4080",
+				"SEARCH_USER":          "zincuser",
+				"SEARCH_PASSWORD":      "zincpass",
 			},
 			wantPort:             "9090",
 			wantDBURL:            "postgres://user:pass@host:5432/db",
@@ -121,7 +123,7 @@ func TestLoadCustomEnv(t *testing.T) {
 			wantSMTPPass:         "custom_pass",
 			wantSMTPFrom:         "alerts@custom.com",
 			wantAdminEmail:       "owner@custom.com",
-			wantElasticsearchURL: "http://es.custom.com:9200",
+			wantElasticsearchURL: "http://zinc.custom.com:4080",
 		},
 		{
 			name: "custom port with default redirect url and smtp defaults",
@@ -129,8 +131,8 @@ func TestLoadCustomEnv(t *testing.T) {
 				"PORT": "3000",
 			},
 			wantPort:             "3000",
-			wantDBURL:            "postgres://postgres:secret@localhost:5433/guestbook_db?sslmode=disable",
-			wantRedisURL:         "redis://localhost:6379/0",
+			wantDBURL:            "postgres://postgres:secret@localhost:5433/meme_hub_db?sslmode=disable",
+			wantRedisURL:         "redis://localhost:6380/0",
 			wantRabbitMQURL:      "amqp://guest:guest@localhost:5672/",
 			wantClientID:         "",
 			wantClientSecret:     "",
@@ -139,9 +141,9 @@ func TestLoadCustomEnv(t *testing.T) {
 			wantSMTPPort:         "1025",
 			wantSMTPUser:         "",
 			wantSMTPPass:         "",
-			wantSMTPFrom:         "noreply@guestbook.local",
-			wantAdminEmail:       "admin@guestbook.local",
-			wantElasticsearchURL: "http://localhost:9200",
+			wantSMTPFrom:         "noreply@meme-hub.local",
+			wantAdminEmail:       "admin@meme-hub.local",
+			wantElasticsearchURL: "http://localhost:4080",
 		},
 	}
 
@@ -152,7 +154,7 @@ func TestLoadCustomEnv(t *testing.T) {
 				"PORT", "DATABASE_URL", "REDIS_URL", "RABBITMQ_URL",
 				"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URL",
 				"SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "ADMIN_EMAIL",
-				"ELASTICSEARCH_URL",
+				"ELASTICSEARCH_URL", "SEARCH_URL", "SEARCH_USER", "SEARCH_PASSWORD", "ZINC_URL", "ZINC_FIRST_ADMIN_USER", "ZINC_FIRST_ADMIN_PASSWORD",
 			} {
 				t.Setenv(k, "")
 			}

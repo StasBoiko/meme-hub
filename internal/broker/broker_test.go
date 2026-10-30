@@ -79,7 +79,7 @@ func TestEmailTaskSerialization(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	task := EmailTask{
 		To:        []string{"admin@example.com", "moderator@example.com"},
-		Subject:   "New Guestbook Entry",
+		Subject:   "New Meme Submission",
 		TextBody:  "Plain text body",
 		HTMLBody:  "<p>HTML body</p>",
 		CreatedAt: now,

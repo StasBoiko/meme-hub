@@ -1,10 +1,14 @@
-// Package repository defines data access interfaces and models for the guestbook application.
+// Package repository defines data access interfaces and models for the meme-hub application.
 package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrNotFound indicates that a requested database entity does not exist.
+var ErrNotFound = errors.New("record not found")
 
 // SessionUser represents an authenticated user session.
 type SessionUser struct {
@@ -14,7 +18,7 @@ type SessionUser struct {
 	Avatar string `json:"avatar"`
 }
 
-// MessageStatus defines the moderation state of a guestbook entry.
+// MessageStatus defines the moderation state of a meme entry.
 type MessageStatus string
 
 const (
@@ -26,7 +30,7 @@ const (
 	MessageStatusRejected MessageStatus = "rejected"
 )
 
-// CommentDTO represents a user comment on a meme or guestbook message.
+// CommentDTO represents a user comment on a meme message.
 type CommentDTO struct {
 	ID        int         `json:"id"`
 	MessageID int         `json:"message_id"`
@@ -35,7 +39,7 @@ type CommentDTO struct {
 	User      SessionUser `json:"user"`
 }
 
-// MessageDTO represents a guestbook entry returned to clients or templates.
+// MessageDTO represents a meme entry returned to clients or templates.
 type MessageDTO struct {
 	ID              int           `json:"id"`
 	Text            string        `json:"text"`
@@ -61,11 +65,13 @@ type VoteResult struct {
 	UserVote  int `json:"user_vote"`
 }
 
-// Repository defines data access methods for the guestbook application.
+// Repository defines data access methods for the meme-hub application.
 type Repository interface {
 	// SaveUser creates or updates a user by email and returns their session data.
 	SaveUser(ctx context.Context, email, name, avatar string) (SessionUser, error)
-	// CreateMessage inserts a new guest message into the database and returns its ID.
+	// GetUserByID retrieves a user record by their unique ID.
+	GetUserByID(ctx context.Context, id int) (SessionUser, error)
+	// CreateMessage inserts a new meme message into the database and returns its ID.
 	CreateMessage(ctx context.Context, userID int, text string, mediaURL string) (int, error)
 	// UpdateMessageStatus updates the moderation status and optional rejection reason for a message.
 	UpdateMessageStatus(ctx context.Context, messageID int, status MessageStatus, reason string) error
@@ -93,4 +99,6 @@ type SessionStore interface {
 	Delete(ctx context.Context, sessionID string) error
 	// Ping verifies connectivity to the underlying session store.
 	Ping(ctx context.Context) error
+	// ClearAll removes all active user sessions from the session store.
+	ClearAll(ctx context.Context) error
 }

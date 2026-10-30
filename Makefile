@@ -5,7 +5,7 @@ export PATH := $(GOPATH)/bin:$(PATH)
 
 .DEFAULT_GOAL := check
 
-.PHONY: all fmt lint test dep check pre-commit build run help
+.PHONY: all fmt lint test dep check pre-commit build run seed seed-clean seed-reset help
 
 all: check
 
@@ -49,6 +49,21 @@ build:
 run:
 	@echo "==> Running server..."
 	$(GO) run ./cmd/server
+
+## Populate database and search index with test fixtures
+seed:
+	@echo "==> Seeding test data..."
+	$(GO) run ./cmd/seed
+
+## Wipe all seeded test data from database and search index
+seed-clean:
+	@echo "==> Cleaning test data..."
+	$(GO) run ./cmd/seed -clean
+
+## Reset database and re-seed fresh test fixtures
+seed-reset:
+	@echo "==> Resetting and re-seeding test data..."
+	$(GO) run ./cmd/seed -reset
 
 ## Run all verification checks in order (dep -> fmt -> lint -> test)
 check: dep fmt lint test

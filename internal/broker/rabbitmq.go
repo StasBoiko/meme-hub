@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	// ExchangeName defines the primary topic exchange for guestbook events.
-	ExchangeName = "guestbook.exchange"
+	// ExchangeName defines the primary topic exchange for meme-hub events.
+	ExchangeName = "memehub.exchange"
 	// RoutingKeySubmitted defines the routing key for newly submitted messages.
 	RoutingKeySubmitted = "message.submitted"
 	// RoutingKeyRejected defines the routing key for rejected messages destined for the DLQ.
@@ -21,13 +21,13 @@ const (
 	// RoutingKeyEmail defines the routing key for outgoing email notification tasks.
 	RoutingKeyEmail = "notification.email"
 	// QueueModeration defines the primary queue consumed by the moderation worker.
-	QueueModeration = "guestbook.messages.moderation"
+	QueueModeration = "memehub.messages.moderation"
 	// QueueEmail defines the primary queue consumed by the email notification worker.
-	QueueEmail = "guestbook.notifications.email"
+	QueueEmail = "memehub.notifications.email"
 	// DLXExchangeName defines the Dead Letter Exchange for rejected messages.
-	DLXExchangeName = "guestbook.dlx"
+	DLXExchangeName = "memehub.dlx"
 	// DLQQueueName defines the Dead Letter Queue storing failed and rejected messages.
-	DLQQueueName = "guestbook.messages.rejected"
+	DLQQueueName = "memehub.messages.rejected"
 )
 
 // RabbitMQClient provides message publishing and topology configuration for RabbitMQ.

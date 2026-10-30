@@ -78,7 +78,7 @@ func (s *SMTPSender) BuildRawMessage(msg Message) []byte {
 	hasText := strings.TrimSpace(msg.TextBody) != ""
 
 	if hasHTML && hasText {
-		boundary := "boundary_guestbook_mime_separator"
+		boundary := "boundary_memehub_mime_separator"
 		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary))
 
 		sb.WriteString(fmt.Sprintf("--%s\r\n", boundary))

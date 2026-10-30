@@ -356,11 +356,11 @@ func TestPostgresRepository_CreateMessage(t *testing.T) {
 		{
 			name:     "successful message creation with media",
 			userID:   1,
-			text:     "Hello guestbook!",
+			text:     "Hello meme hub!",
 			mediaURL: "https://example.com/cat.jpg",
 			mockSetup: func(mock sqlmock.Sqlmock) {
 				mock.ExpectQuery(queryPattern).
-					WithArgs(1, "Hello guestbook!", "https://example.com/cat.jpg").
+					WithArgs(1, "Hello meme hub!", "https://example.com/cat.jpg").
 					WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
 			},
 			wantID:  42,
@@ -832,6 +832,55 @@ func TestPostgresRepository_GetCommentsByMessageIDs(t *testing.T) {
 		}
 		if len(res[10]) != 1 || len(res[20]) != 1 {
 			t.Errorf("unexpected grouping result: %+v", res)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unfulfilled sqlmock expectations: %v", err)
+		}
+	})
+}
+
+// TestPostgresRepository_GetUserByID tests retrieving a user by ID including success, not found, and error cases.
+func TestPostgresRepository_GetUserByID(t *testing.T) {
+	t.Run("successful user retrieval", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer func() { _ = db.Close() }()
+
+		cols := []string{"id", "email", "name", "avatar"}
+		mock.ExpectQuery("SELECT id, email, name, COALESCE\\(avatar, ''\\) FROM users WHERE id = \\$1").
+			WithArgs(42).
+			WillReturnRows(sqlmock.NewRows(cols).AddRow(42, "user@example.com", "Test User", "https://example.com/avatar.jpg"))
+
+		repo := NewPostgresRepository(db)
+		user, err := repo.GetUserByID(context.Background(), 42)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if user.ID != 42 || user.Email != "user@example.com" {
+			t.Errorf("unexpected user returned: %+v", user)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Errorf("unfulfilled sqlmock expectations: %v", err)
+		}
+	})
+
+	t.Run("user not found returns ErrNotFound", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("failed to create sqlmock: %v", err)
+		}
+		defer func() { _ = db.Close() }()
+
+		mock.ExpectQuery("SELECT id, email, name, COALESCE\\(avatar, ''\\) FROM users WHERE id = \\$1").
+			WithArgs(999).
+			WillReturnError(sql.ErrNoRows)
+
+		repo := NewPostgresRepository(db)
+		_, err = repo.GetUserByID(context.Background(), 999)
+		if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("expected ErrNotFound, got %v", err)
 		}
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Errorf("unfulfilled sqlmock expectations: %v", err)

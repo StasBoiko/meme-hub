@@ -42,6 +42,10 @@ func (m *mockSearchService) Ping(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockSearchService) DeleteIndex(ctx context.Context) error {
+	return nil
+}
+
 // mockRepository is an in-memory implementation of the Repository interface for testing.
 type mockRepository struct {
 	messages         []repository.MessageDTO
@@ -66,6 +70,14 @@ func (m *mockRepository) SaveUser(ctx context.Context, email, name, avatar strin
 		return repository.SessionUser{}, m.saveUserErr
 	}
 	return repository.SessionUser{ID: 1, Email: email, Name: name, Avatar: avatar}, nil
+}
+
+// GetUserByID simulates retrieving a user by ID.
+func (m *mockRepository) GetUserByID(ctx context.Context, id int) (repository.SessionUser, error) {
+	if m.saveUserErr != nil {
+		return repository.SessionUser{}, m.saveUserErr
+	}
+	return repository.SessionUser{ID: id}, nil
 }
 
 // CreateMessage simulates saving a message in memory and returns a mock message ID or configured error.
@@ -308,13 +320,53 @@ func TestHandleHealthz(t *testing.T) {
 	}
 }
 
-// TestHandleIndex_Success tests that GET / renders the guestbook page with existing messages.
+// TestHandleFavicon tests GET, HEAD, and unsupported methods on /favicon.ico using table-driven tests.
+func TestHandleFavicon(t *testing.T) {
+	tests := []struct {
+		name           string
+		method         string
+		wantStatusCode int
+	}{
+		{
+			name:           "get favicon returns 204",
+			method:         http.MethodGet,
+			wantStatusCode: http.StatusNoContent,
+		},
+		{
+			name:           "head favicon returns 204",
+			method:         http.MethodHead,
+			wantStatusCode: http.StatusNoContent,
+		},
+		{
+			name:           "post favicon returns 405",
+			method:         http.MethodPost,
+			wantStatusCode: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestServer(t, &mockRepository{})
+			req := httptest.NewRequest(tc.method, "/favicon.ico", nil)
+			rec := httptest.NewRecorder()
+
+			s.Routes().ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatusCode {
+				t.Fatalf("expected status %d, got %d", tc.wantStatusCode, rec.Code)
+			}
+		})
+	}
+}
+
+// TestHandleIndex_Success tests that GET / renders the meme-hub page with existing messages.
 func TestHandleIndex_Success(t *testing.T) {
 	repo := &mockRepository{
 		messages: []repository.MessageDTO{
 			{
 				ID:        1,
-				Text:      "Welcome to the guestbook!",
+				Text:      "Welcome to Meme Hub!",
 				CreatedAt: time.Now(),
 				User:      repository.SessionUser{ID: 1, Name: "Alice"},
 			},
@@ -332,7 +384,7 @@ func TestHandleIndex_Success(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "Welcome to the guestbook!") {
+	if !strings.Contains(body, "Welcome to Meme Hub!") {
 		t.Errorf("expected rendered page to contain message, got body: %s", body)
 	}
 }
@@ -1248,8 +1300,8 @@ func TestHandleCallback_WelcomeEmailDispatched(t *testing.T) {
 	if pub.emailTasks[0].To[0] != "newuser@example.com" {
 		t.Errorf("email task recipient = %q, want %q", pub.emailTasks[0].To[0], "newuser@example.com")
 	}
-	if pub.emailTasks[0].Subject != "Welcome to Smart Guestbook!" {
-		t.Errorf("email task subject = %q, want %q", pub.emailTasks[0].Subject, "Welcome to Smart Guestbook!")
+	if pub.emailTasks[0].Subject != "Welcome to Meme Hub!" {
+		t.Errorf("email task subject = %q, want %q", pub.emailTasks[0].Subject, "Welcome to Meme Hub!")
 	}
 }
 
@@ -1429,10 +1481,16 @@ func TestHandleMessages_WithMediaURL(t *testing.T) {
 	sessionID := "media-session"
 	_ = s.sessions.Set(context.Background(), sessionID, repository.SessionUser{ID: 15, Name: "Poster"}, time.Hour)
 
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/gif")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
 	t.Run("valid media url accepted", func(t *testing.T) {
 		form := url.Values{}
 		form.Set("text", "Check this funny cat!")
-		form.Set("media_url", "https://example.com/cat.gif")
+		form.Set("media_url", ts.URL+"/cat.gif")
 
 		req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1444,7 +1502,7 @@ func TestHandleMessages_WithMediaURL(t *testing.T) {
 		if rec.Code != http.StatusSeeOther {
 			t.Fatalf("expected status 303 See Other, got %d", rec.Code)
 		}
-		if len(repo.messages) == 0 || repo.messages[len(repo.messages)-1].MediaURL != "https://example.com/cat.gif" {
+		if len(repo.messages) == 0 || repo.messages[len(repo.messages)-1].MediaURL != ts.URL+"/cat.gif" {
 			t.Errorf("media_url was not stored properly")
 		}
 	})
@@ -1463,6 +1521,58 @@ func TestHandleMessages_WithMediaURL(t *testing.T) {
 
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("invalid media url returns JSON error for AJAX request", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "Testing bad media link")
+		form.Set("media_url", "https://invalid-host-that-does-not-exist-12345.com/pic.jpg")
+
+		req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+		}
+
+		var resp map[string]string
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode JSON response: %v", err)
+		}
+		if !strings.Contains(resp["error"], "invalid media link") {
+			t.Errorf("expected error message to contain 'invalid media link', got %q", resp["error"])
+		}
+	})
+
+	t.Run("valid submission returns JSON 201 for AJAX request", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("text", "AJAX post with valid media")
+		form.Set("media_url", ts.URL+"/cat.gif")
+
+		req := httptest.NewRequest(http.MethodPost, "/messages", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Accept", "application/json")
+		req.AddCookie(&http.Cookie{Name: s.cfg.Session.CookieName, Value: sessionID})
+		rec := httptest.NewRecorder()
+
+		s.Routes().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("expected status 201 Created, got %d", rec.Code)
+		}
+
+		var resp map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("failed to decode JSON response: %v", err)
+		}
+		if resp["status"] != "ok" {
+			t.Errorf("expected status 'ok', got %v", resp["status"])
 		}
 	})
 }
@@ -1514,21 +1624,55 @@ func TestIsVideoURL(t *testing.T) {
 // TestYouTubeEmbedURL tests generation of YouTube embed iframe URLs.
 func TestYouTubeEmbedURL(t *testing.T) {
 	tests := []struct {
-		url  string
-		want string
+		url         string
+		wantContain string
 	}{
-		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
-		{"https://youtu.be/dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
-		{"https://youtube.com/shorts/dQw4w9WgXcQ", "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"},
+		{"https://www.youtube.com/watch?v=dQw4w9WgXcQ", "youtube.com/embed/dQw4w9WgXcQ"},
+		{"https://youtu.be/dQw4w9WgXcQ", "youtube.com/embed/dQw4w9WgXcQ"},
+		{"https://youtube.com/shorts/dQw4w9WgXcQ", "youtube.com/embed/dQw4w9WgXcQ"},
 		{"https://example.com/video.mp4", ""},
 		{"", ""},
 	}
 
 	for _, tc := range tests {
 		got := YouTubeEmbedURL(tc.url)
-		if got != tc.want {
-			t.Errorf("YouTubeEmbedURL(%q) = %q, want %q", tc.url, got, tc.want)
+		if tc.wantContain == "" {
+			if got != "" {
+				t.Errorf("YouTubeEmbedURL(%q) = %q, want empty", tc.url, got)
+			}
+		} else {
+			if !strings.Contains(got, tc.wantContain) {
+				t.Errorf("YouTubeEmbedURL(%q) = %q, want containing %q", tc.url, got, tc.wantContain)
+			}
 		}
+	}
+}
+
+// TestVideoEmbedURL tests generation of iframe embed URLs for standard embeds.
+func TestVideoEmbedURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		wantContain string
+	}{
+		{"Direct iframe embed path", "https://customplayer.com/embed/video123", "https://customplayer.com/embed/video123"},
+		{"Plain video file", "https://example.com/video.mp4", ""},
+		{"Empty string", "", ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := VideoEmbedURL(tc.url)
+			if tc.wantContain == "" {
+				if got != "" {
+					t.Errorf("VideoEmbedURL(%q) = %q, want empty", tc.url, got)
+				}
+			} else {
+				if !strings.Contains(got, tc.wantContain) {
+					t.Errorf("VideoEmbedURL(%q) = %q, want %q", tc.url, got, tc.wantContain)
+				}
+			}
+		})
 	}
 }
 
@@ -1707,4 +1851,52 @@ func TestHandleGetComments(t *testing.T) {
 			t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
 		}
 	})
+}
+
+// TestLinkPlatform tests platform categorization and metadata using table-driven tests.
+func TestLinkPlatform(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		wantName string
+		wantIcon string
+	}{
+		{
+			name:     "reddit URL",
+			url:      "https://v.redd.it/cg9s5h516xza1",
+			wantName: "v.redd.it",
+			wantIcon: "🌐",
+		},
+		{
+			name:     "twitter / x URL",
+			url:      "https://x.com/GitHub/status/12345",
+			wantName: "x.com",
+			wantIcon: "🌐",
+		},
+		{
+			name:     "facebook URL",
+			url:      "https://www.facebook.com/watch/?v=123",
+			wantName: "www.facebook.com",
+			wantIcon: "🌐",
+		},
+		{
+			name:     "generic external URL",
+			url:      "https://example.com/some/article",
+			wantName: "example.com",
+			wantIcon: "🌐",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			info := LinkPlatform(tc.url)
+			if info.Name != tc.wantName {
+				t.Errorf("expected Name %q, got %q", tc.wantName, info.Name)
+			}
+			if info.Icon != tc.wantIcon {
+				t.Errorf("expected Icon %q, got %q", tc.wantIcon, info.Icon)
+			}
+		})
+	}
 }

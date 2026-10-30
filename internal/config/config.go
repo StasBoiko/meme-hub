@@ -23,7 +23,13 @@ type Config struct {
 	Session SessionConfig
 	// SMTP contains configuration parameters for outgoing email delivery.
 	SMTP SMTPConfig
-	// ElasticsearchURL contains the Elasticsearch connection URL.
+	// SearchURL contains the ZincSearch connection URL.
+	SearchURL string
+	// SearchUser contains the ZincSearch basic auth username.
+	SearchUser string
+	// SearchPassword contains the ZincSearch basic auth password.
+	SearchPassword string
+	// ElasticsearchURL is retained for backwards compatibility.
 	ElasticsearchURL string
 }
 
@@ -74,10 +80,14 @@ func Load() Config {
 	port := getEnv("PORT", "8080")
 	redirectURL := getEnv("GOOGLE_REDIRECT_URL", "http://localhost:"+port+"/callback")
 
+	searchURL := getEnv("SEARCH_URL", getEnv("ZINC_URL", getEnv("ELASTICSEARCH_URL", "http://localhost:4080")))
+	searchUser := getEnv("SEARCH_USER", getEnv("ZINC_FIRST_ADMIN_USER", "admin"))
+	searchPass := getEnv("SEARCH_PASSWORD", getEnv("ZINC_FIRST_ADMIN_PASSWORD", "password"))
+
 	return Config{
 		Port:        port,
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:secret@localhost:5433/guestbook_db?sslmode=disable"),
-		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:secret@localhost:5433/meme_hub_db?sslmode=disable"),
+		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6380/0"),
 		RabbitMQURL: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		OAuth: OAuthConfig{
 			ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -93,10 +103,13 @@ func Load() Config {
 			Port:       getEnv("SMTP_PORT", "1025"),
 			Username:   os.Getenv("SMTP_USER"),
 			Password:   os.Getenv("SMTP_PASS"),
-			From:       getEnv("SMTP_FROM", "noreply@guestbook.local"),
-			AdminEmail: getEnv("ADMIN_EMAIL", "admin@guestbook.local"),
+			From:       getEnv("SMTP_FROM", "noreply@meme-hub.local"),
+			AdminEmail: getEnv("ADMIN_EMAIL", "admin@meme-hub.local"),
 		},
-		ElasticsearchURL: getEnv("ELASTICSEARCH_URL", "http://localhost:9200"),
+		SearchURL:        searchURL,
+		SearchUser:       searchUser,
+		SearchPassword:   searchPass,
+		ElasticsearchURL: searchURL,
 	}
 }
 

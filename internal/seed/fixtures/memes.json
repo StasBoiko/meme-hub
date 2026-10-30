@@ -1,0 +1,492 @@
+[
+  {
+    "user_email": "catcoder@example.com",
+    "text": "First video in internet history: me at the zoo explaining Kubernetes architecture. [YOUTUBE SHORT CLIP]",
+    "media_url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+    "upvotes": 542,
+    "downvotes": 3,
+    "days_ago": 1,
+    "target_comments": 48,
+    "comments": [
+      {
+        "user_email": "codeninja@example.com",
+        "text": "19 seconds of pure internet history. The elephants definitely understand Docker."
+      },
+      {
+        "user_email": "bughunter@example.com",
+        "text": "Legend says this was filmed right before the first npm install."
+      },
+      {
+        "user_email": "backend@example.com",
+        "text": "oEmbed metadata pulled the title and author automatically!"
+      }
+    ]
+  },
+  {
+    "user_email": "frontend@example.com",
+    "text": "When you finally refactor the entire state machine and CI pipeline stays completely green. [YOUTUBE SHORTS]",
+    "media_url": "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+    "upvotes": 780,
+    "downvotes": 8,
+    "days_ago": 1,
+    "target_comments": 65,
+    "comments": [
+      {
+        "user_email": "dogelover@example.com",
+        "text": "Did I just get Rickrolled in vertical Shorts format? 10/10 meme execution!"
+      },
+      {
+        "user_email": "catcoder@example.com",
+        "text": "Vertical aspect ratio fits mobile screens perfectly."
+      }
+    ]
+  },
+  {
+    "user_email": "codeninja@example.com",
+    "text": "When your code compiles on the first attempt with zero warnings. Cinematic masterpiece. [VIMEO]",
+    "media_url": "https://vimeo.com/76979871",
+    "upvotes": 395,
+    "downvotes": 4,
+    "days_ago": 2,
+    "target_comments": 35,
+    "comments": [
+      {
+        "user_email": "frontend@example.com",
+        "text": "Vimeo oEmbed provides crystal clear player integration."
+      },
+      {
+        "user_email": "devops@example.com",
+        "text": "Zero warnings on compilation is a mathematical miracle."
+      }
+    ]
+  },
+  {
+    "user_email": "nightowl@example.com",
+    "text": "POV: You open Slack at 11:30 PM and see 'Hey, quick question' from your tech lead. [DAILYMOTION]",
+    "media_url": "https://www.dailymotion.com/video/x7tgad0",
+    "upvotes": 280,
+    "downvotes": 5,
+    "days_ago": 2,
+    "target_comments": 28,
+    "comments": [
+      {
+        "user_email": "bughunter@example.com",
+        "text": "Quick question always translates to: your weekend is officially canceled."
+      },
+      {
+        "user_email": "backend@example.com",
+        "text": "Status: Immediately appearing offline."
+      }
+    ]
+  },
+  {
+    "user_email": "pixelartist@example.com",
+    "text": "Infinite loop detected during the live architecture review. Snow loop meditation. [COUB]",
+    "media_url": "https://coub.com/view/1hyxa1",
+    "upvotes": 310,
+    "downvotes": 2,
+    "days_ago": 2,
+    "target_comments": 22,
+    "comments": [
+      {
+        "user_email": "frontend@example.com",
+        "text": "The hypnotic infinite loop matches my debugging session at 2 AM."
+      }
+    ]
+  },
+  {
+    "user_email": "coffeefirst@example.com",
+    "text": "Recording a quick 30-second screen capture to explain a bug instead of writing a 10-page Jira ticket. [LOOM]",
+    "media_url": "https://www.loom.com/share/221f217704be4b668928c1a4cacb2f0e",
+    "upvotes": 415,
+    "downvotes": 6,
+    "days_ago": 3,
+    "target_comments": 42,
+    "comments": [
+      {
+        "user_email": "bughunter@example.com",
+        "text": "Loom screen recorders: saving engineering hours since 2019."
+      },
+      {
+        "user_email": "codeninja@example.com",
+        "text": "Watching bugs at 2x speed is my primary cardio exercise."
+      }
+    ]
+  },
+  {
+    "user_email": "dogelover@example.com",
+    "text": "Enterprise video presentation explaining why we urgently need a barista-grade espresso machine. [WISTIA]",
+    "media_url": "https://fast.wistia.net/embed/iframe/gmwg9g412y",
+    "upvotes": 290,
+    "downvotes": 4,
+    "days_ago": 3,
+    "target_comments": 19,
+    "comments": [
+      {
+        "user_email": "coffeefirst@example.com",
+        "text": "Budget approved immediately with zero questions asked."
+      }
+    ]
+  },
+  {
+    "user_email": "devops@example.com",
+    "text": "Open-source decentralized video federation streaming Big Buck Bunny smoothly. [PEERTUBE]",
+    "media_url": "https://video.blender.org/videos/watch/bf1f3fb5-b119-4f9f-9930-8e20e892b898",
+    "upvotes": 340,
+    "downvotes": 5,
+    "days_ago": 3,
+    "target_comments": 31,
+    "comments": [
+      {
+        "user_email": "catcoder@example.com",
+        "text": "PeerTube adhering strictly to oEmbed and open standards is pure bliss."
+      }
+    ]
+  },
+  {
+    "user_email": "bughunter@example.com",
+    "text": "Cat conducting critical QA testing on hardware peripheral. [NATIVE HTML5 WEBM]",
+    "media_url": "https://upload.wikimedia.org/wikipedia/commons/2/21/Cat_playing_with_a_lizard.webm",
+    "upvotes": 520,
+    "downvotes": 7,
+    "days_ago": 4,
+    "target_comments": 49,
+    "comments": [
+      {
+        "user_email": "cybercat@example.com",
+        "text": "High agility penetration testing in progress!"
+      },
+      {
+        "user_email": "dogelover@example.com",
+        "text": "Native HTML5 video starts instantly with muted autoplay."
+      }
+    ]
+  },
+  {
+    "user_email": "cybercat@example.com",
+    "text": "Junior developer kneading the keyboard to make sure the unit tests pass. [NATIVE HTML5 WEBM]",
+    "media_url": "https://upload.wikimedia.org/wikipedia/commons/d/d0/Cat_kneading_and_sucking_blanket.webm",
+    "upvotes": 610,
+    "downvotes": 4,
+    "days_ago": 4,
+    "target_comments": 53,
+    "comments": [
+      {
+        "user_email": "catcoder@example.com",
+        "text": "Making biscuits is how you properly warm up before writing Go concurrency routines."
+      }
+    ]
+  },
+  {
+    "user_email": "dogelover@example.com",
+    "text": "Sentry alert firing 400 times in 10 seconds. Sound the alarms! [NATIVE HTML5 WEBM]",
+    "media_url": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Joy_%26_Heron_-_Animated_CGI_Spot_by_Passion_Pictures.webm",
+    "upvotes": 375,
+    "downvotes": 8,
+    "days_ago": 4,
+    "target_comments": 29,
+    "comments": [
+      {
+        "user_email": "backend@example.com",
+        "text": "Who silenced the PagerDuty oncall rotation?!"
+      }
+    ]
+  },
+  {
+    "user_email": "memelord99@example.com",
+    "text": "Live thermal camera capture of the Kubernetes cluster during the flash sale. [NATIVE WEBM]",
+    "media_url": "https://upload.wikimedia.org/wikipedia/commons/8/8c/67_meme_gesture.webm",
+    "upvotes": 430,
+    "downvotes": 8,
+    "days_ago": 5,
+    "target_comments": 40,
+    "comments": [
+      {
+        "user_email": "quantum@example.com",
+        "text": "Auto-scaler: I am doing my best, please have mercy!"
+      }
+    ]
+  },
+  {
+    "user_email": "quantum@example.com",
+    "text": "The microservice blooming peacefully after the memory leak was plugged. [NATIVE HTML5 MP4]",
+    "media_url": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "upvotes": 315,
+    "downvotes": 3,
+    "days_ago": 5,
+    "target_comments": 24,
+    "comments": [
+      {
+        "user_email": "frontend@example.com",
+        "text": "Mozilla MDN sample video loading clean and fast."
+      }
+    ]
+  },
+  {
+    "user_email": "memelord99@example.com",
+    "text": "Classic high-definition Big Buck Bunny animation loop. [OPEN BENCHMARK WEBM]",
+    "media_url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm",
+    "upvotes": 260,
+    "downvotes": 4,
+    "days_ago": 5,
+    "target_comments": 24,
+    "comments": [
+      {
+        "user_email": "pixelartist@example.com",
+        "text": "The timeless open source benchmark video!"
+      }
+    ]
+  },
+  {
+    "user_email": "codeninja@example.com",
+    "text": "Live developer energy when the production deployment succeeds on Friday afternoon. [PHOTO]",
+    "media_url": "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 490,
+    "downvotes": 6,
+    "days_ago": 6,
+    "target_comments": 38,
+    "comments": [
+      {
+        "user_email": "backend@example.com",
+        "text": "Peak mechanical keyboard velocity achieved!"
+      }
+    ]
+  },
+  {
+    "user_email": "dogelover@example.com",
+    "text": "Doggo witnessing the master branch break after a single line commit. [DOGGO MEME]",
+    "media_url": "https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 595,
+    "downvotes": 5,
+    "days_ago": 6,
+    "target_comments": 45,
+    "comments": [
+      {
+        "user_email": "cybercat@example.com",
+        "text": "Much shock. Very bug. Wow."
+      }
+    ]
+  },
+  {
+    "user_email": "cybercat@example.com",
+    "text": "Cat typing 180 words per minute to fix the production outage. [ANIMATED GIF]",
+    "media_url": "https://media.giphy.com/media/BzyTuYCmvSORqs1ABM/giphy.gif",
+    "upvotes": 689,
+    "downvotes": 4,
+    "days_ago": 6,
+    "target_comments": 35,
+    "comments": [
+      {
+        "user_email": "catcoder@example.com",
+        "text": "Senior keyboard cat saving the day again."
+      }
+    ]
+  },
+  {
+    "user_email": "dogelover@example.com",
+    "text": "When the junior developer pushes straight to main branch without running any tests. [PHOTO]",
+    "media_url": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 342,
+    "downvotes": 3,
+    "days_ago": 7,
+    "target_comments": 22,
+    "comments": [
+      {
+        "user_email": "bughunter@example.com",
+        "text": "The classic Doge face of disbelief!"
+      }
+    ]
+  },
+  {
+    "user_email": "frontend@example.com",
+    "text": "Aesthetic developer workstation vibes during a rainy Friday refactor. [PHOTO]",
+    "media_url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 415,
+    "downvotes": 9,
+    "days_ago": 7,
+    "target_comments": 30,
+    "comments": [
+      {
+        "user_email": "pixelartist@example.com",
+        "text": "Coffee + dark mode + quiet rain = maximum developer focus."
+      }
+    ]
+  },
+  {
+    "user_email": "cybercat@example.com",
+    "text": "Entering the Matrix after writing your first recursive binary tree traversal. [PHOTO]",
+    "media_url": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 330,
+    "downvotes": 6,
+    "days_ago": 7,
+    "target_comments": 25,
+    "comments": [
+      {
+        "user_email": "backend@example.com",
+        "text": "Follow the white rabbit into goroutines."
+      }
+    ]
+  },
+  {
+    "user_email": "catcoder@example.com",
+    "text": "Cat vibing to lo-fi coding beats while waiting for the Docker image to build. [ANIMATED GIF]",
+    "media_url": "https://media.giphy.com/media/ule4akeXnY9A4/giphy.gif",
+    "upvotes": 580,
+    "downvotes": 5,
+    "days_ago": 8,
+    "target_comments": 40,
+    "comments": [
+      {
+        "user_email": "dogelover@example.com",
+        "text": "The rhythmic head nod matches my heartbeat when `go build` runs."
+      }
+    ]
+  },
+  {
+    "user_email": "codeninja@example.com",
+    "text": "Late night debugging session: Coffee level: 0%. Error count: 127. Determination: 100%. [PHOTO]",
+    "media_url": "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=800&auto=format&fit=crop&q=80",
+    "upvotes": 410,
+    "downvotes": 7,
+    "days_ago": 8,
+    "target_comments": 32,
+    "comments": [
+      {
+        "user_email": "nightowl@example.com",
+        "text": "Between 2 AM and 4 AM is when the cleanest code is written."
+      }
+    ]
+  },
+  {
+    "user_email": "cybercat@example.com",
+    "text": "Cat aggressively reviewing your latest pull request. Needs more tuna. [ANIMATED GIF]",
+    "media_url": "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
+    "upvotes": 620,
+    "downvotes": 3,
+    "days_ago": 9,
+    "target_comments": 44,
+    "comments": [
+      {
+        "user_email": "catcoder@example.com",
+        "text": "PR status: Changes requested by chief feline officer."
+      }
+    ]
+  },
+  {
+    "user_email": "backend@example.com",
+    "text": "There are only 10 types of people in the world: those who understand binary, and those who don't. [CLASSIC DEV HUMOR]",
+    "media_url": "",
+    "upvotes": 520,
+    "downvotes": 12,
+    "days_ago": 9,
+    "target_comments": 41,
+    "comments": [
+      {
+        "user_email": "codeninja@example.com",
+        "text": "...and those who didn't expect this joke to be in base 3!"
+      },
+      {
+        "user_email": "frontend@example.com",
+        "text": "Pure text memes render with crisp modern typography."
+      }
+    ]
+  },
+  {
+    "user_email": "bughunter@example.com",
+    "text": "A SQL query walks into a bar, walks up to two tables and asks: 'Can I join you?' [DBA HUMOR]",
+    "media_url": "",
+    "upvotes": 612,
+    "downvotes": 15,
+    "days_ago": 10,
+    "target_comments": 50,
+    "comments": [
+      {
+        "user_email": "backend@example.com",
+        "text": "The bartender replies: 'Only if you have an ON condition!'"
+      },
+      {
+        "user_email": "devops@example.com",
+        "text": "Left join or inner join? That defines your personality."
+      }
+    ]
+  },
+  {
+    "user_email": "devops@example.com",
+    "text": "Why do programmers prefer dark mode? Because light attracts bugs. [LIGHT BULB TRUTH]",
+    "media_url": "",
+    "upvotes": 730,
+    "downvotes": 10,
+    "days_ago": 10,
+    "target_comments": 60,
+    "comments": [
+      {
+        "user_email": "frontend@example.com",
+        "text": "Can confirm. Switched to light mode once and had 3 NullPointerExceptions."
+      }
+    ]
+  },
+  {
+    "user_email": "gitpusher@example.com",
+    "text": "Git commit messages over time: 1. Initial commit. 2. Added features. 3. Fixed typos. 4. Please work. 5. asdfghjk. 6. Final fix 2. 7. I hate computers. [DEV REALITY]",
+    "media_url": "",
+    "upvotes": 850,
+    "downvotes": 8,
+    "days_ago": 11,
+    "target_comments": 72,
+    "comments": [
+      {
+        "user_email": "codeninja@example.com",
+        "text": "You forgot: 'git push --force and praying'."
+      },
+      {
+        "user_email": "backend@example.com",
+        "text": "And the legendary: 'revert revert revert final'."
+      }
+    ]
+  },
+  {
+    "user_email": "quantum@example.com",
+    "text": "Software development timeline: 90% of the project takes 90% of the time. The remaining 10% takes the other 90% of the time. [NINETY-NINETY RULE]",
+    "media_url": "",
+    "upvotes": 670,
+    "downvotes": 7,
+    "days_ago": 12,
+    "target_comments": 38,
+    "comments": [
+      {
+        "user_email": "coffeefirst@example.com",
+        "text": "Tom Cargill's rule proven accurate in every sprint ever planned."
+      }
+    ]
+  },
+  {
+    "user_email": "coffeefirst@example.com",
+    "text": "Coffee: A magical substance that turns 'undefined is not a function' into 'Ship it to production'. [ENERGY SOURCE]",
+    "media_url": "",
+    "upvotes": 590,
+    "downvotes": 5,
+    "days_ago": 12,
+    "target_comments": 33,
+    "comments": [
+      {
+        "user_email": "catcoder@example.com",
+        "text": "Without coffee, the stack trace becomes philosophical."
+      }
+    ]
+  },
+  {
+    "user_email": "nightowl@example.com",
+    "text": "If at first you don't succeed, call it version 1.0 and let user bug reports do your testing. [ENTERPRISE STRATEGY]",
+    "media_url": "",
+    "upvotes": 640,
+    "downvotes": 14,
+    "days_ago": 14,
+    "target_comments": 45,
+    "comments": [
+      {
+        "user_email": "gitpusher@example.com",
+        "text": "Move fast and break things, then create Jira tickets for things you broke."
+      }
+    ]
+  }
+]

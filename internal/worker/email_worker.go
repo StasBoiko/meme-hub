@@ -56,7 +56,7 @@ func (w *EmailWorker) Start(ctx context.Context) error {
 
 	deliveries, err := ch.Consume(
 		w.queueName,
-		"guestbook-email-worker",
+		"meme-hub-email-worker",
 		false, // manual acknowledgment for delivery guarantees
 		false, // exclusive
 		false, // no-local

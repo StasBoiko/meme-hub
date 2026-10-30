@@ -76,15 +76,15 @@ Review and adjust variables in `.env` as needed:
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | `PORT` | HTTP server port | `8080` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgres://postgres:secret@localhost:5433/guestbook_db?sslmode=disable` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgres://postgres:secret@localhost:5433/meme_hub_db?sslmode=disable` |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6380/0` |
 | `RABBITMQ_URL` | RabbitMQ connection string | `amqp://guest:guest@localhost:5672/` |
 | `SMTP_HOST` | SMTP server host | `localhost` (or `mailpit` in Docker) |
 | `SMTP_PORT` | SMTP server port | `1025` (Mailpit) / `587` (Brevo, Gmail) |
 | `SMTP_USER` | SMTP username | *(empty for Mailpit)* |
 | `SMTP_PASS` | SMTP password / app key | *(empty for Mailpit)* |
-| `SMTP_FROM` | Outgoing email sender address | `noreply@guestbook.local` |
-| `ADMIN_EMAIL` | Administrator alert recipient | `admin@guestbook.local` |
+| `SMTP_FROM` | Outgoing email sender address | `noreply@meme-hub.local` |
+| `ADMIN_EMAIL` | Administrator alert recipient | `admin@meme-hub.local` |
 | `ELASTICSEARCH_URL` | Elasticsearch cluster endpoint | `http://localhost:9200` |
 | `GOOGLE_CLIENT_ID` | Google OAuth2 Client ID | `your-google-client-id.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth2 Client Secret | `your-google-client-secret` |
@@ -104,7 +104,7 @@ docker compose up -d postgres redis rabbitmq mailpit elasticsearch
 ```
 
 - **PostgreSQL**: Port `5433`
-- **Redis**: Port `6379`
+- **Redis**: Port `6380`
 - **RabbitMQ**: Port `5672` (AMQP broker) and [http://localhost:15672](http://localhost:15672) (Management Web UI, user: `guest`, pass: `guest`)
 - **Mailpit**: Port `1025` (SMTP) and [http://localhost:8025](http://localhost:8025) (Webmail inbox interface to view emails sent by the app)
 - **Elasticsearch**: Port `9200` (REST API for full-text search)
@@ -136,13 +136,13 @@ Once running, navigate to [http://localhost:8080](http://localhost:8080) in your
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Guestbook web interface (displays messages and submission form) |
+| `GET` | `/` | Meme Hub web interface (displays memes and submission form) |
 | `GET` | `/healthz` | Health check endpoint for liveness and database connectivity probes |
 | `GET` | `/login` | Initiates Google OAuth 2.0 authentication flow |
 | `GET` | `/callback` | Handles OAuth 2.0 callback from Google and establishes session |
 | `POST` | `/logout` | Signs out the current user and clears session cookie |
-| `POST` | `/messages` | Submits a new guestbook entry (requires authentication) |
-| `GET` | `/api/messages` | Returns the latest guestbook messages formatted as JSON |
+| `POST` | `/messages` | Submits a new meme entry (requires authentication) |
+| `GET` | `/api/messages` | Returns the latest meme messages formatted as JSON |
 | `GET` | `/api/me` | Returns the authenticated user profile as JSON |
 
 ---
@@ -168,6 +168,9 @@ The `make check` target sequentially executes:
 
 - **`make build`** — Compiles the binary into `bin/server`.
 - **`make run`** — Starts the application server directly (`go run ./cmd/server`).
+- **`make seed`** — Populates the database and Elasticsearch search index with realistic test fixtures.
+- **`make seed-clean`** — Wipes all seeded test data and clears the search index.
+- **`make seed-reset`** — Safely resets and re-populates fresh test fixtures.
 - **`make pre-commit`** — Alias for `make check`.
 - **`make help`** — Displays an overview of all available targets.
 

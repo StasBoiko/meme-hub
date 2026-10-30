@@ -1,28 +1,28 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: guestbook-db
+    container_name: meme-hub-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
-      POSTGRES_DB: guestbook_db
+      POSTGRES_DB: meme_hub_db
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d guestbook_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d meme_hub_db"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: guestbook-redis
+    container_name: meme-hub-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -33,7 +33,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    container_name: guestbook-rabbitmq
+    container_name: meme-hub-rabbitmq
     restart: unless-stopped
     ports:
       - "5672:5672"
@@ -51,24 +51,23 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: guestbook-mailpit
+    container_name: meme-hub-mailpit
     restart: unless-stopped
     ports:
       - "1025:1025"
       - "8025:8025"
 
-  elasticsearch:
-    image: elasticsearch:8.15.0
-    container_name: guestbook-elasticsearch
+  zincsearch:
+    image: zinclabs/zincsearch:latest
+    container_name: meme-hub-zincsearch
     restart: unless-stopped
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      ZINC_FIRST_ADMIN_USER: admin
+      ZINC_FIRST_ADMIN_PASSWORD: password
     ports:
-      - "9200:9200"
+      - "4080:4080"
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      - zincsearch_data:/data
 
   app:
     build:
@@ -80,16 +79,19 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      DATABASE_URL: "postgres://postgres:secret@postgres:5432/guestbook_db?sslmode=disable"
+      DATABASE_URL: "postgres://postgres:secret@postgres:5432/meme_hub_db?sslmode=disable"
       REDIS_URL: "redis://redis:6379/0"
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
-      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
+      SEARCH_URL: "${SEARCH_URL:-http://zincsearch:4080}"
+      SEARCH_USER: "${SEARCH_USER:-admin}"
+      SEARCH_PASSWORD: "${SEARCH_PASSWORD:-password}"
+      ELASTICSEARCH_URL: "${ELASTICSEARCH_URL:-http://zincsearch:4080}"
       SMTP_HOST: "${SMTP_HOST:-mailpit}"
       SMTP_PORT: "${SMTP_PORT:-1025}"
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
-      SMTP_FROM: "${SMTP_FROM:-noreply@guestbook.local}"
-      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@guestbook.local}"
+      SMTP_FROM: "${SMTP_FROM:-noreply@meme-hub.local}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@meme-hub.local}"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       GOOGLE_REDIRECT_URL: "${GOOGLE_REDIRECT_URL:-http://localhost:8080/callback}"
@@ -102,11 +104,11 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
-      elasticsearch:
+      zincsearch:
         condition: service_started
 
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
-  elasticsearch_data:
+  zincsearch_data:

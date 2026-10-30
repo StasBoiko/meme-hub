@@ -1,4 +1,4 @@
-// Package repository defines data access interfaces and models for the guestbook application.
+// Package repository defines data access interfaces and models for the meme-hub application.
 package repository
 
 import (

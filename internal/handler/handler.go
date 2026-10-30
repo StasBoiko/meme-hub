@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -24,6 +23,7 @@ import (
 
 	"meme-hub/internal/broker"
 	"meme-hub/internal/config"
+	"meme-hub/internal/media"
 	"meme-hub/internal/repository"
 	"meme-hub/internal/search"
 	"meme-hub/internal/validator"
@@ -89,6 +89,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/favicon.ico", s.handleFavicon)
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/callback", s.handleCallback)
 	mux.HandleFunc("/logout", s.handleLogout)
@@ -100,6 +101,17 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/messages/{id}/comments", s.handleGetComments)
 	mux.HandleFunc("POST /messages/{id}/comments", s.handleCreateComment)
 	mux.HandleFunc("/api/me", s.handleAPIMe)
+
+	staticDir := "web/static"
+	if _, err := os.Stat(staticDir); err != nil {
+		if _, err2 := os.Stat("../../web/static"); err2 == nil {
+			staticDir = "../../web/static"
+		} else if _, err3 := os.Stat("../web/static"); err3 == nil {
+			staticDir = "../web/static"
+		}
+	}
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+
 	return mux
 }
 
@@ -135,7 +147,16 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleIndex handles GET requests to the root path and renders the guestbook page.
+// handleFavicon handles favicon.ico requests returning HTTP 204 No Content.
+func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleIndex handles GET requests to the root path and renders the meme-hub page.
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -316,9 +337,9 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	if s.publisher != nil && profile.Email != "" {
 		welcomeTask := broker.EmailTask{
 			To:        []string{profile.Email},
-			Subject:   "Welcome to Smart Guestbook!",
-			TextBody:  fmt.Sprintf("Hello %s!\n\nWelcome to Smart Guestbook. Thank you for signing in.", profile.Name),
-			HTMLBody:  fmt.Sprintf("<h2>Welcome to Smart Guestbook!</h2><p>Hello <strong>%s</strong>,</p><p>Thank you for signing in. We are delighted to have you join our guestbook!</p>", template.HTMLEscapeString(profile.Name)),
+			Subject:   "Welcome to Meme Hub!",
+			TextBody:  fmt.Sprintf("Hello %s!\n\nWelcome to Meme Hub. Thank you for signing in.", profile.Name),
+			HTMLBody:  fmt.Sprintf("<h2>Welcome to Meme Hub!</h2><p>Hello <strong>%s</strong>,</p><p>Thank you for signing in. We are delighted to have you join Meme Hub!</p>", template.HTMLEscapeString(profile.Name)),
 			CreatedAt: time.Now().UTC(),
 		}
 		if pubErr := s.publisher.PublishEmailTask(ctx, welcomeTask); pubErr != nil {
@@ -348,38 +369,77 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// handleMessages handles POST submissions for new guestbook entries.
+// handleMessages handles POST submissions for new meme entries.
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") ||
+		strings.Contains(r.Header.Get("Content-Type"), "application/json") ||
+		r.Header.Get("X-Requested-With") == "XMLHttpRequest"
+
 	user, ok := s.CurrentUser(r)
 	if !ok {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			return
+		}
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
+			if isJSON {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid form data"})
+				return
+			}
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := r.ParseForm(); err != nil {
+			if isJSON {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid form data"})
+				return
+			}
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
+		}
 	}
 	text := strings.TrimSpace(r.FormValue("text"))
 	mediaURL := strings.TrimSpace(r.FormValue("media_url"))
 
 	if err := validator.ValidateMessageText(text); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	if mediaURL != "" {
-		if !strings.HasPrefix(mediaURL, "http://") && !strings.HasPrefix(mediaURL, "https://") {
-			http.Error(w, "media url must start with http:// or https://", http.StatusBadRequest)
-			return
-		}
-		if utf8.RuneCountInString(mediaURL) > 2000 {
-			http.Error(w, "media url is too long", http.StatusBadRequest)
+		if err := validator.ValidateMediaURL(r.Context(), mediaURL); err != nil {
+			errMsg := fmt.Sprintf("invalid media link: %s", err.Error())
+			if isJSON {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": errMsg})
+				return
+			}
+			http.Error(w, errMsg, http.StatusBadRequest)
 			return
 		}
 	}
@@ -387,6 +447,12 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	msgID, err := s.repo.CreateMessage(r.Context(), user.ID, text, mediaURL)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "error saving message", "err", err)
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "could not save message"})
+			return
+		}
 		http.Error(w, "could not save message", http.StatusInternalServerError)
 		return
 	}
@@ -404,10 +470,19 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "failed to publish moderation task to broker", "err", pubErr, "messageID", msgID)
 	}
 
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		if encErr := json.NewEncoder(w).Encode(map[string]any{"status": "ok", "message_id": msgID}); encErr != nil {
+			slog.ErrorContext(r.Context(), "failed to encode message creation response", "err", encErr)
+		}
+		return
+	}
+
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// handleAPIMessages returns the list of guestbook messages as JSON.
+// handleAPIMessages returns the list of meme messages as JSON.
 func (s *Server) handleAPIMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -461,6 +536,21 @@ func (s *Server) handleAPIMessages(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "error loading api messages", "err", err)
 		http.Error(w, "could not load messages", http.StatusInternalServerError)
 		return
+	}
+
+	if len(messages) > 0 {
+		ids := make([]int, len(messages))
+		for i, m := range messages {
+			ids[i] = m.ID
+		}
+		if commentsMap, cErr := s.repo.GetCommentsByMessageIDs(r.Context(), ids); cErr == nil {
+			for i := range messages {
+				if list, exists := commentsMap[messages[i].ID]; exists {
+					messages[i].Comments = list
+					messages[i].CommentsCount = len(list)
+				}
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -684,6 +774,18 @@ func (s *Server) CurrentUser(r *http.Request) (repository.SessionUser, bool) {
 	if err != nil || !ok {
 		return repository.SessionUser{}, false
 	}
+	dbUser, err := s.repo.GetUserByID(r.Context(), user.ID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			_ = s.sessions.Delete(r.Context(), c.Value)
+			return repository.SessionUser{}, false
+		}
+		return user, true
+	}
+	if user.Email != "" && dbUser.Email != "" && user.Email != dbUser.Email {
+		_ = s.sessions.Delete(r.Context(), c.Value)
+		return repository.SessionUser{}, false
+	}
 	return user, true
 }
 
@@ -718,71 +820,37 @@ func FormatTime(t time.Time) string {
 	return t.Local().Format("02.01.2006, 15:04")
 }
 
-// IsImageURL checks if the provided URL points to a common image format.
+// IsImageURL checks if the provided URL points to an image format or visual media.
 func IsImageURL(rawURL string) bool {
-	if rawURL == "" {
-		return false
-	}
-	u := strings.ToLower(strings.Split(rawURL, "?")[0])
-	for _, ext := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif"} {
-		if strings.HasSuffix(u, ext) {
-			return true
-		}
-	}
-	return false
+	return media.IsImageURL(rawURL)
 }
 
 // IsVideoURL checks if the provided URL points to a direct video file.
 func IsVideoURL(rawURL string) bool {
-	if rawURL == "" {
-		return false
-	}
-	u := strings.ToLower(strings.Split(rawURL, "?")[0])
-	for _, ext := range []string{".mp4", ".webm", ".ogg", ".mov"} {
-		if strings.HasSuffix(u, ext) {
-			return true
-		}
-	}
-	return false
+	return media.IsVideoURL(rawURL)
 }
 
 // YouTubeEmbedURL extracts the YouTube video identifier and returns an embed iframe URL.
 func YouTubeEmbedURL(rawURL string) string {
-	if rawURL == "" {
-		return ""
-	}
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	host := strings.ToLower(parsed.Host)
-	host = strings.TrimPrefix(host, "www.")
+	return media.YouTubeEmbedURL(rawURL)
+}
 
-	var videoID string
-	if host == "youtube.com" || host == "m.youtube.com" {
-		if parsed.Path == "/watch" {
-			videoID = parsed.Query().Get("v")
-		} else if strings.HasPrefix(parsed.Path, "/shorts/") {
-			videoID = strings.TrimPrefix(parsed.Path, "/shorts/")
-		} else if strings.HasPrefix(parsed.Path, "/embed/") {
-			videoID = strings.TrimPrefix(parsed.Path, "/embed/")
-		}
-	} else if host == "youtu.be" {
-		videoID = strings.TrimPrefix(parsed.Path, "/")
-	}
+// VideoEmbedURL converts known platform video URLs into embeddable iframe URLs.
+func VideoEmbedURL(rawURL string) string {
+	return media.VideoEmbedURL(rawURL)
+}
 
-	cleanID := ""
-	for _, r := range videoID {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			cleanID += string(r)
-		} else {
-			break
-		}
-	}
-	if cleanID == "" {
-		return ""
-	}
-	return fmt.Sprintf("https://www.youtube-nocookie.com/embed/%s", cleanID)
+// IsVerticalEmbed reports whether the embed URL is a vertical video (e.g. TikTok, Shorts, Instagram Reel).
+func IsVerticalEmbed(rawURL string) bool {
+	return media.IsVerticalEmbed(rawURL)
+}
+
+// PlatformInfo holds branding and visual metadata for external link cards.
+type PlatformInfo = media.PlatformInfo
+
+// LinkPlatform returns platform metadata for external media URLs.
+func LinkPlatform(rawURL string) PlatformInfo {
+	return media.LinkPlatform(rawURL)
 }
 
 // TemplateFuncs returns the template helper functions map.
@@ -793,6 +861,10 @@ func TemplateFuncs() template.FuncMap {
 		"isImageURL":      IsImageURL,
 		"isVideoURL":      IsVideoURL,
 		"youtubeEmbedURL": YouTubeEmbedURL,
+		"videoEmbedURL":   VideoEmbedURL,
+		"isVerticalEmbed": IsVerticalEmbed,
+		"linkPlatform":    LinkPlatform,
+		"resolveMedia":    media.Resolve,
 	}
 }
 

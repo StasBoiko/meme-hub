@@ -25,7 +25,7 @@ func TestNopSender(t *testing.T) {
 
 // TestSMTPSender_BuildRawMessage tests MIME formatting for plain text, HTML, and multipart messages.
 func TestSMTPSender_BuildRawMessage(t *testing.T) {
-	sender := NewSMTPSender("localhost", "1025", "", "", "noreply@guestbook.local")
+	sender := NewSMTPSender("localhost", "1025", "", "", "noreply@meme-hub.local")
 
 	tests := []struct {
 		name        string
@@ -41,7 +41,7 @@ func TestSMTPSender_BuildRawMessage(t *testing.T) {
 				HTMLBody: "<p>HTML version</p>",
 			},
 			wantSubstrs: []string{
-				"From: noreply@guestbook.local",
+				"From: noreply@meme-hub.local",
 				"To: user@example.com",
 				"Subject: Welcome!",
 				"multipart/alternative",
@@ -57,7 +57,7 @@ func TestSMTPSender_BuildRawMessage(t *testing.T) {
 				TextBody: "Plain text notice only",
 			},
 			wantSubstrs: []string{
-				"From: noreply@guestbook.local",
+				"From: noreply@meme-hub.local",
 				"To: bob@example.com",
 				"Subject: Notice",
 				"Content-Type: text/plain",
@@ -72,7 +72,7 @@ func TestSMTPSender_BuildRawMessage(t *testing.T) {
 				HTMLBody: "<h1>Important</h1>",
 			},
 			wantSubstrs: []string{
-				"From: noreply@guestbook.local",
+				"From: noreply@meme-hub.local",
 				"To: charlie@example.com",
 				"Subject: HTML Alert",
 				"Content-Type: text/html",
@@ -162,7 +162,7 @@ func TestSMTPSender_Send(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			sender := NewSMTPSender("localhost", "1025", tc.username, tc.password, "noreply@guestbook.local")
+			sender := NewSMTPSender("localhost", "1025", tc.username, tc.password, "noreply@meme-hub.local")
 
 			var recordedAddr string
 			var recordedAuth smtp.Auth

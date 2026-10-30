@@ -25,6 +25,10 @@ func (m *mockRepo) SaveUser(ctx context.Context, email, name, avatar string) (re
 	return repository.SessionUser{}, nil
 }
 
+func (m *mockRepo) GetUserByID(ctx context.Context, id int) (repository.SessionUser, error) {
+	return repository.SessionUser{ID: id, Email: "user@example.com", Name: "Test User"}, nil
+}
+
 func (m *mockRepo) CreateMessage(ctx context.Context, userID int, text string, mediaURL string) (int, error) {
 	return 1, nil
 }
@@ -96,6 +100,10 @@ func (m *mockSearch) Ping(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockSearch) DeleteIndex(ctx context.Context) error {
+	return nil
+}
+
 // TestModerationWorker_ProcessTask tests worker processing for approved, rejected, and database failure conditions.
 func TestModerationWorker_ProcessTask(t *testing.T) {
 	moderator := moderation.NewRuleBasedModerator()
@@ -117,7 +125,7 @@ func TestModerationWorker_ProcessTask(t *testing.T) {
 				UserID:     1,
 				AuthorName: "Alice",
 				Avatar:     "https://example.com/avatar.png",
-				Text:       "Great guestbook service, thank you!",
+				Text:       "Great meme service, thank you!",
 				CreatedAt:  time.Now(),
 			},
 			updateErr:    nil,

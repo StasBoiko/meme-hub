@@ -18,7 +18,7 @@ import (
 	"meme-hub/internal/search"
 )
 
-// ModerationWorker consumes guestbook messages from RabbitMQ and applies content moderation.
+// ModerationWorker consumes meme messages from RabbitMQ and applies content moderation.
 type ModerationWorker struct {
 	conn       *amqp.Connection
 	repo       repository.Repository
@@ -72,7 +72,7 @@ func (w *ModerationWorker) Start(ctx context.Context) error {
 
 	deliveries, err := ch.Consume(
 		w.queueName,
-		"guestbook-moderation-worker",
+		"meme-hub-moderation-worker",
 		false, // auto-ack disabled: manual ack/nack for reliability
 		false, // exclusive
 		false, // no-local
@@ -154,9 +154,9 @@ func (w *ModerationWorker) ProcessTask(ctx context.Context, task broker.Moderati
 		if w.publisher != nil && w.adminEmail != "" {
 			emailTask := broker.EmailTask{
 				To:        []string{w.adminEmail},
-				Subject:   fmt.Sprintf("New Guestbook Message Approved (ID: %d)", task.MessageID),
-				TextBody:  fmt.Sprintf("A new guestbook entry was approved.\n\nAuthor User ID: %d\nMessage: %s", task.UserID, task.Text),
-				HTMLBody:  fmt.Sprintf("<h2>New Guestbook Entry Approved</h2><p><strong>Author User ID:</strong> %d</p><p><strong>Message:</strong></p><blockquote>%s</blockquote>", task.UserID, template.HTMLEscapeString(task.Text)),
+				Subject:   fmt.Sprintf("New Meme Approved (ID: %d)", task.MessageID),
+				TextBody:  fmt.Sprintf("A new meme was approved.\n\nAuthor User ID: %d\nMessage: %s", task.UserID, task.Text),
+				HTMLBody:  fmt.Sprintf("<h2>New Meme Approved</h2><p><strong>Author User ID:</strong> %d</p><p><strong>Message:</strong></p><blockquote>%s</blockquote>", task.UserID, template.HTMLEscapeString(task.Text)),
 				CreatedAt: time.Now().UTC(),
 			}
 			if pubErr := w.publisher.PublishEmailTask(ctx, emailTask); pubErr != nil {
@@ -173,9 +173,9 @@ func (w *ModerationWorker) ProcessTask(ctx context.Context, task broker.Moderati
 	if w.publisher != nil && w.adminEmail != "" {
 		emailTask := broker.EmailTask{
 			To:        []string{w.adminEmail},
-			Subject:   fmt.Sprintf("[Spam Alert] Guestbook Message Rejected (ID: %d)", task.MessageID),
-			TextBody:  fmt.Sprintf("A guestbook entry was rejected during moderation.\n\nAuthor User ID: %d\nReason: %s\nMessage: %s", task.UserID, result.Reason, task.Text),
-			HTMLBody:  fmt.Sprintf("<h2 style=\"color: red;\">Spam Message Rejected</h2><p><strong>Author User ID:</strong> %d</p><p><strong>Reason:</strong> %s</p><p><strong>Message Content:</strong></p><blockquote>%s</blockquote>", task.UserID, template.HTMLEscapeString(result.Reason), template.HTMLEscapeString(task.Text)),
+			Subject:   fmt.Sprintf("[Spam Alert] Meme Rejected (ID: %d)", task.MessageID),
+			TextBody:  fmt.Sprintf("A meme was rejected during moderation.\n\nAuthor User ID: %d\nReason: %s\nMessage: %s", task.UserID, result.Reason, task.Text),
+			HTMLBody:  fmt.Sprintf("<h2 style=\"color: red;\">Spam Meme Rejected</h2><p><strong>Author User ID:</strong> %d</p><p><strong>Reason:</strong> %s</p><p><strong>Message Content:</strong></p><blockquote>%s</blockquote>", task.UserID, template.HTMLEscapeString(result.Reason), template.HTMLEscapeString(task.Text)),
 			CreatedAt: time.Now().UTC(),
 		}
 		if pubErr := w.publisher.PublishEmailTask(ctx, emailTask); pubErr != nil {

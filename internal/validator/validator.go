@@ -2,14 +2,22 @@
 package validator
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
+
+	"meme-hub/internal/media"
 )
 
-// MaxMessageLength is the maximum allowed rune length for a guestbook message.
+// MaxMessageLength is the maximum allowed rune length for a meme message.
 const MaxMessageLength = 2000
 
 // maxEmailLength is the maximum allowed length for an email address per RFC 5321.
@@ -113,4 +121,172 @@ func ValidateCommentText(text string) error {
 // IsValidCommentText reports whether the provided comment text is valid.
 func IsValidCommentText(text string) bool {
 	return ValidateCommentText(text) == nil
+}
+
+// MaxMediaURLLength is the maximum allowed rune length for a media URL.
+const MaxMediaURLLength = 2000
+
+// ErrMediaURLTooLong indicates that the media URL exceeds the maximum length.
+var ErrMediaURLTooLong = errors.New("media url is too long")
+
+// ErrInvalidMediaURLScheme indicates that the media URL does not have an http or https scheme.
+var ErrInvalidMediaURLScheme = errors.New("media url must start with http:// or https://")
+
+// ErrInvalidMediaURLFormat indicates that the media URL cannot be parsed.
+var ErrInvalidMediaURLFormat = errors.New("invalid media url format")
+
+// ErrMediaURLUnreachable indicates that the media URL could not be resolved or returned an HTTP error.
+var ErrMediaURLUnreachable = errors.New("media url is unreachable or does not exist")
+
+// ErrUnsupportedMediaType indicates that the target URL is not a valid image or video resource.
+var ErrUnsupportedMediaType = errors.New("url does not point to a supported image or video resource")
+
+// MediaHTTPClient allows injecting a custom HTTP client for media validation tests.
+var MediaHTTPClient = &http.Client{
+	Timeout: 4 * time.Second,
+}
+
+// isSupportedVideoPlatform reports whether the parsed URL belongs to a known media platform.
+func isSupportedVideoPlatform(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	return media.IsSupportedPlatform(parsed.String())
+}
+
+// hasHTMLVideoMeta checks whether an HTML response contains oEmbed video discovery or OpenGraph video meta tags.
+func hasHTMLVideoMeta(body io.Reader) bool {
+	lr := io.LimitReader(body, 32768)
+	buf, err := io.ReadAll(lr)
+	if err != nil || len(buf) == 0 {
+		return false
+	}
+	content := strings.ToLower(string(buf))
+
+	// OpenGraph video or Twitter player tags
+	if strings.Contains(content, `property="og:video"`) ||
+		strings.Contains(content, `property='og:video'`) ||
+		strings.Contains(content, `property="og:video:url"`) ||
+		strings.Contains(content, `property='og:video:url'`) ||
+		strings.Contains(content, `name="twitter:player"`) ||
+		strings.Contains(content, `name='twitter:player'`) ||
+		(strings.Contains(content, `property="og:type"`) && strings.Contains(content, `content="video"`)) ||
+		(strings.Contains(content, `property='og:type'`) && strings.Contains(content, `content='video'`)) {
+		return true
+	}
+
+	// oEmbed discovery tag
+	if strings.Contains(content, `type="application/json+oembed"`) ||
+		strings.Contains(content, `type='application/json+oembed'`) {
+		return true
+	}
+
+	return false
+}
+
+// checkRemoteMedia validates accessibility and Content-Type of a remote media resource.
+func checkRemoteMedia(ctx context.Context, rawURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidMediaURLFormat, err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MemeHub/1.0")
+
+	resp, err := MediaHTTPClient.Do(req)
+	isGet := false
+	if err != nil || (resp != nil && (resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusForbidden)) {
+		getReq, getErr := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if getErr == nil {
+			getReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MemeHub/1.0")
+			getReq.Header.Set("Range", "bytes=0-32768")
+			if getResp, doErr := MediaHTTPClient.Do(getReq); doErr == nil {
+				if resp != nil {
+					_ = resp.Body.Close()
+				}
+				resp = getResp
+				isGet = true
+				err = nil
+			}
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrMediaURLUnreachable, err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return fmt.Errorf("%w: HTTP status %d", ErrMediaURLUnreachable, resp.StatusCode)
+	}
+
+	contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+	cleanPath := strings.ToLower(strings.Split(rawURL, "?")[0])
+	hasMediaExt := false
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico", ".mp4", ".webm", ".ogg", ".mov", ".m4v"} {
+		if strings.HasSuffix(cleanPath, ext) {
+			hasMediaExt = true
+			break
+		}
+	}
+
+	if strings.HasPrefix(contentType, "image/") || strings.HasPrefix(contentType, "video/") || hasMediaExt || strings.Contains(contentType, "octet-stream") {
+		return nil
+	}
+
+	// Universal oEmbed and OpenGraph discovery for video web pages
+	if strings.Contains(contentType, "text/html") {
+		if isGet && hasHTMLVideoMeta(resp.Body) {
+			return nil
+		}
+		if !isGet {
+			getReq, getErr := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+			if getErr == nil {
+				getReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MemeHub/1.0")
+				getReq.Header.Set("Range", "bytes=0-32768")
+				if getResp, doErr := MediaHTTPClient.Do(getReq); doErr == nil {
+					defer func() {
+						_ = getResp.Body.Close()
+					}()
+					if hasHTMLVideoMeta(getResp.Body) {
+						return nil
+					}
+				}
+			}
+		}
+	}
+
+	return ErrUnsupportedMediaType
+}
+
+// ValidateMediaURL checks whether the provided rawURL is a reachable media file or supported video/platform URL.
+func ValidateMediaURL(ctx context.Context, rawURL string) error {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return nil
+	}
+
+	if utf8.RuneCountInString(trimmed) > MaxMediaURLLength {
+		return ErrMediaURLTooLong
+	}
+
+	if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		return ErrInvalidMediaURLScheme
+	}
+
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil || parsed.Host == "" {
+		return ErrInvalidMediaURLFormat
+	}
+
+	if isSupportedVideoPlatform(parsed) {
+		return nil
+	}
+
+	return checkRemoteMedia(ctx, trimmed)
+}
+
+// IsValidMediaURL reports whether the provided media URL is valid and accessible.
+func IsValidMediaURL(ctx context.Context, rawURL string) bool {
+	return ValidateMediaURL(ctx, rawURL) == nil
 }

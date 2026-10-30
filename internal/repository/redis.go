@@ -1,4 +1,4 @@
-// Package repository defines data access interfaces and models for the guestbook application.
+// Package repository defines data access interfaces and models for the meme-hub application.
 package repository
 
 import (
@@ -69,6 +69,20 @@ func (s *RedisSessionStore) Delete(ctx context.Context, sessionID string) error 
 func (s *RedisSessionStore) Ping(ctx context.Context) error {
 	if err := s.client.Ping(ctx).Err(); err != nil {
 		return fmt.Errorf("pinging redis: %w", err)
+	}
+	return nil
+}
+
+// ClearAll removes all active user session keys from Redis.
+func (s *RedisSessionStore) ClearAll(ctx context.Context) error {
+	iter := s.client.Scan(ctx, 0, "session:*", 0).Iterator()
+	for iter.Next(ctx) {
+		if err := s.client.Del(ctx, iter.Val()).Err(); err != nil {
+			return fmt.Errorf("deleting session key %s: %w", iter.Val(), err)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("iterating session keys: %w", err)
 	}
 	return nil
 }

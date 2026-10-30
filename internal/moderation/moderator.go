@@ -1,4 +1,4 @@
-// Package moderation provides content moderation and spam filtering for guestbook messages.
+// Package moderation provides content moderation and spam filtering for meme messages.
 package moderation
 
 import (

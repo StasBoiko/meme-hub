@@ -35,3 +35,6 @@ ehthumbs.db
 # Test artifacts and coverage
 *.test
 *.out
+
+# Local AI agent personal preferences
+GEMINI.md

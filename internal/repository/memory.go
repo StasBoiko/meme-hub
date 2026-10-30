@@ -1,4 +1,4 @@
-// Package repository defines data access interfaces and models for the guestbook application.
+// Package repository defines data access interfaces and models for the meme-hub application.
 package repository
 
 import (
@@ -58,5 +58,13 @@ func (m *MemorySessionStore) Delete(ctx context.Context, sessionID string) error
 
 // Ping verifies connectivity to the in-memory session store.
 func (m *MemorySessionStore) Ping(ctx context.Context) error {
+	return nil
+}
+
+// ClearAll removes all active user sessions from memory.
+func (m *MemorySessionStore) ClearAll(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sessions = make(map[string]memorySessionEntry)
 	return nil
 }

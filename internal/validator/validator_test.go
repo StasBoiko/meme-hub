@@ -2,7 +2,10 @@
 package validator
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -302,6 +305,185 @@ func TestValidateCommentText(t *testing.T) {
 			valid := IsValidCommentText(tc.text)
 			if valid != tc.wantValid {
 				t.Fatalf("IsValidCommentText(%q) = %v, wantValid = %v", tc.text, valid, tc.wantValid)
+			}
+		})
+	}
+}
+
+// TestValidateMediaURL tests media URL validation against various URL schemes, YouTube formats, and HTTP responses.
+func TestValidateMediaURL(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/image.jpg":
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.WriteHeader(http.StatusOK)
+		case "/video.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			w.WriteHeader(http.StatusOK)
+		case "/html-page":
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+		case "/oembed-page":
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><link rel="alternate" type="application/json+oembed" href="https://example.com/oembed.json"></head><body>Video</body></html>`))
+		case "/og-video-page":
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<!DOCTYPE html><html><head><meta property="og:video" content="https://example.com/player.mp4"></head><body>Video</body></html>`))
+		case "/not-found":
+			w.WriteHeader(http.StatusNotFound)
+		case "/server-error":
+			w.WriteHeader(http.StatusInternalServerError)
+		default:
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	defer ts.Close()
+
+	tests := []struct {
+		name      string
+		rawURL    string
+		wantError error
+		wantValid bool
+	}{
+		{
+			name:      "empty media url is allowed",
+			rawURL:    "",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "whitespace only media url is allowed",
+			rawURL:    "   \t\n",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "url exceeds maximum length",
+			rawURL:    "https://example.com/" + strings.Repeat("a", MaxMediaURLLength),
+			wantError: ErrMediaURLTooLong,
+			wantValid: false,
+		},
+		{
+			name:      "invalid scheme ftp",
+			rawURL:    "ftp://example.com/image.jpg",
+			wantError: ErrInvalidMediaURLScheme,
+			wantValid: false,
+		},
+		{
+			name:      "valid standard youtube watch url",
+			rawURL:    "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid youtube shorts url",
+			rawURL:    "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid youtu.be short url",
+			rawURL:    "https://youtu.be/dQw4w9WgXcQ",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid vimeo video url",
+			rawURL:    "https://vimeo.com/76979871",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid dailymotion video url",
+			rawURL:    "https://www.dailymotion.com/video/x7tgad0",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid streamable video url",
+			rawURL:    "https://streamable.com/moo",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid rumble video url",
+			rawURL:    "https://rumble.com/embed/v3abcdef",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "valid coub video url",
+			rawURL:    "https://coub.com/view/1hyxa1",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "reachable image endpoint",
+			rawURL:    ts.URL + "/image.jpg",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "reachable video endpoint",
+			rawURL:    ts.URL + "/video.mp4",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "reachable html page with oembed link is accepted",
+			rawURL:    ts.URL + "/oembed-page",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "reachable html page with og:video meta tag is accepted",
+			rawURL:    ts.URL + "/og-video-page",
+			wantError: nil,
+			wantValid: true,
+		},
+		{
+			name:      "unsupported media type html without video meta",
+			rawURL:    ts.URL + "/html-page",
+			wantError: ErrUnsupportedMediaType,
+			wantValid: false,
+		},
+		{
+			name:      "404 not found media endpoint",
+			rawURL:    ts.URL + "/not-found",
+			wantError: ErrMediaURLUnreachable,
+			wantValid: false,
+		},
+		{
+			name:      "500 internal server error media endpoint",
+			rawURL:    ts.URL + "/server-error",
+			wantError: ErrMediaURLUnreachable,
+			wantValid: false,
+		},
+		{
+			name:      "relative or local path rejected with invalid scheme",
+			rawURL:    "/static/videos/does_not_exist_12345.mp4",
+			wantError: ErrInvalidMediaURLScheme,
+			wantValid: false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateMediaURL(context.Background(), tc.rawURL)
+			if tc.wantError != nil {
+				if !errors.Is(err, tc.wantError) {
+					t.Fatalf("ValidateMediaURL(%q) error = %v, wantError = %v", tc.rawURL, err, tc.wantError)
+				}
+			} else if err != nil {
+				t.Fatalf("ValidateMediaURL(%q) unexpected error = %v", tc.rawURL, err)
+			}
+
+			valid := IsValidMediaURL(context.Background(), tc.rawURL)
+			if valid != tc.wantValid {
+				t.Fatalf("IsValidMediaURL(%q) = %v, wantValid = %v", tc.rawURL, valid, tc.wantValid)
 			}
 		})
 	}
